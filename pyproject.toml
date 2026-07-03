@@ -64,6 +64,7 @@ include = [
   "/micro/gpio_button.py",
   "/micro/led_flasher.py",
   "/micro/main.py",
+  "/micro/periodic_timer.py"
   "/micro/wifi.py",
   "/micro/config_example.json",
 ]
