@@ -31,6 +31,10 @@ class LedFlasher:
     def off(self):
         self.led.value(0)
 
+    def set_interval(self, interval_ms):
+        self.interval_ms = interval_ms
+        self.timer.set_period(interval_ms)
+
     def _tick(self):
         if self.should_flash():
             self.led.value(not self.led.value())

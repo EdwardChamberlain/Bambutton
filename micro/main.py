@@ -5,12 +5,14 @@ import gpio_button
 import led_flasher
 import wifi
 import periodic_timer
+import printer_status
 
 
 config = config_loader.load_config()
 
 # -- Runtime Flags ---
 PRINTER_AWAITING_PLATE_CLEAR = False
+PRINTER_STATUS = printer_status.PrinterStatus.IDLE
 PENDING_BUTTON_PRESS = False
 CHAMBER_LIGHT_IS_ON = True
 PRINTER_STATUS_UPDATE_REQUIRED = True
@@ -18,7 +20,7 @@ PRINTER_STATUS_UPDATE_REQUIRED = True
 # -- Initialize LED flasher ---
 flasher = led_flasher.LedFlasher(
     pin_number=config["led"]["pin"],
-    should_flash=lambda: PRINTER_AWAITING_PLATE_CLEAR,
+    should_flash=lambda: PRINTER_STATUS == printer_status.PrinterStatus.PAUSE or PRINTER_AWAITING_PLATE_CLEAR,
     interval_ms=config["led"]["flash_interval_ms"],
     inactive_value=lambda: CHAMBER_LIGHT_IS_ON,
 )
@@ -83,8 +85,18 @@ def handle_pending_button_press():
     global PENDING_BUTTON_PRESS
     global PRINTER_AWAITING_PLATE_CLEAR
     global PRINTER_STATUS_UPDATE_REQUIRED
+    global PRINTER_STATUS
 
-    if PRINTER_AWAITING_PLATE_CLEAR:
+    if PRINTER_STATUS == printer_status.PrinterStatus.PAUSE:
+        try:
+            api.resume_print(config["printer"]["id"])
+            PRINTER_STATUS_UPDATE_REQUIRED = True
+            print("Sent resume request")
+
+        except Exception as exc:
+            print("Failed to send resume request:", exc)
+
+    elif PRINTER_AWAITING_PLATE_CLEAR:
         try:
             PRINTER_AWAITING_PLATE_CLEAR = False
             api.clear_plate(config["printer"]["id"])
@@ -94,21 +106,27 @@ def handle_pending_button_press():
             print("Failed to send plate clear request:", exc)
 
     else:
-        print("Button press ignored - printer not awaiting plate clear")
+        print("Button press ignored - printer not paused or awaiting plate clear")
 
     PENDING_BUTTON_PRESS = False
 
 
 def handle_printer_status_update():
     global PRINTER_AWAITING_PLATE_CLEAR, PRINTER_STATUS_UPDATE_REQUIRED
-    global CHAMBER_LIGHT_IS_ON
+    global PRINTER_STATUS, CHAMBER_LIGHT_IS_ON
 
     try:
         response = api.get_printer_status(config["printer"]["id"])
-        PRINTER_AWAITING_PLATE_CLEAR = response["awaiting_plate_clear"]
-        CHAMBER_LIGHT_IS_ON = response["chamber_light"]
+        PRINTER_AWAITING_PLATE_CLEAR = response.get("awaiting_plate_clear", False)
+        CHAMBER_LIGHT_IS_ON = response.get("chamber_light", True)
+        PRINTER_STATUS = response.get("state", printer_status.PrinterStatus.IDLE)
 
-        print("Printer awaiting plate clear:", PRINTER_AWAITING_PLATE_CLEAR, "Chamber light is on:", CHAMBER_LIGHT_IS_ON)
+        print("Printer status:", PRINTER_STATUS, "Awaiting plate clear:", PRINTER_AWAITING_PLATE_CLEAR, "Chamber light is on:", CHAMBER_LIGHT_IS_ON)
+
+        if PRINTER_STATUS == printer_status.PrinterStatus.PAUSE:
+            flasher.set_interval(500)
+        elif PRINTER_AWAITING_PLATE_CLEAR:
+            flasher.set_interval(config["led"]["flash_interval_ms"])
 
     except Exception as exc:
         print("Failed to fetch printer status:", exc)

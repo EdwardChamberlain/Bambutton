@@ -51,14 +51,16 @@ Whilst this repo does carry a firmware binary for the ESP32-C3 Generic board I s
 
 Key files:
 
-- `micro/main.py` - board entry point and application loop.
+- `micro/main.py` - board entry point and application loop; handles button presses, status polling, resume/plate-clear logic, and LED control.
 - `micro/config.json` - runtime configuration loaded by the board at boot.
 - `micro/config_loader.py` - config loader with defaults.
 - `micro/api.py` - low-level API-key HTTP client.
-- `micro/bambuddy_api.py` - route-level Bambuddy API wrapper.
+- `micro/bambuddy_api.py` - route-level Bambuddy API wrapper (status, resume, plate clear).
 - `micro/wifi.py` - Wi-Fi connection helper.
 - `micro/gpio_button.py` - debounced GPIO interrupt button helper.
-- `micro/led_flasher.py` - timer-driven LED flasher.
+- `micro/led_flasher.py` - timer-driven LED flasher with dynamic intervals (slow for pause, fast for plate clear).
+- `micro/printer_status.py` - printer state enum (PAUSE, PRINTING, FINISHED, IDLE).
+- `micro/periodic_timer.py` - periodic timer for status polling.
 - `firmware/ESP32_GENERIC_C3-20260406-v1.28.0.bin` - bundled ESP32-C3 MicroPython firmware image.
 - `scripts/push_micro.py` - copies required MicroPython files to the board with `mpremote`.
 - `scripts/run_main.py` - runs `micro/main.py` on the board without copying it as an auto-start file.
