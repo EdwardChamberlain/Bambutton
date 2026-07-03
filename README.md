@@ -268,6 +268,8 @@ Use GPIO numbers, not physical pin positions.
 - Do not feed 5V into an ESP32-C3 GPIO. ESP32-C3 GPIO is 3.3V logic.
 - If the button LED needs more current than a GPIO can safely provide, drive it through a transistor/MOSFET instead of directly from the GPIO.
 
+> Note: The LED state is tied to the printers chamber light state. Turning off the printer light turns off the standby light on the button!
+
 #### Power and USB:
 
 - Use a data-capable USB cable for programming. Charge-only USB cables will power the board but will not appear to `mpremote`.
