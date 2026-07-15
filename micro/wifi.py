@@ -34,6 +34,14 @@ class WiFi:
         print("Network config:", self.wlan.ifconfig())
         return self.wlan
 
+    def ensure_connected(self):
+        if self.is_connected():
+            return self.wlan
+
+        print("Wi-Fi connection lost; reconnecting")
+        self.wlan.disconnect()
+        return self.connect()
+
     def is_connected(self):
         return self.wlan.isconnected()
 

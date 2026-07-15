@@ -1,4 +1,5 @@
 import time
+from machine import WDT
 import bambuddy_api
 import config_loader
 import gpio_button
@@ -14,6 +15,10 @@ PRINTER_AWAITING_PLATE_CLEAR = False
 PENDING_BUTTON_PRESS = False
 CHAMBER_LIGHT_IS_ON = True
 PRINTER_STATUS_UPDATE_REQUIRED = True
+
+# Feed this only from the healthy main loop. If a network request or the
+# networking stack blocks, the board will reboot and reconnect from scratch.
+watchdog = WDT(timeout=60_000)
 
 # -- Initialize LED flasher ---
 flasher = led_flasher.LedFlasher(
@@ -79,6 +84,11 @@ poll_timer.start()
 
 
 # --- Main loop handlers ---
+def with_network_connection(request):
+    network.ensure_connected()
+    return request()
+
+
 def handle_pending_button_press():
     global PENDING_BUTTON_PRESS
     global PRINTER_AWAITING_PLATE_CLEAR
@@ -87,7 +97,9 @@ def handle_pending_button_press():
     if PRINTER_AWAITING_PLATE_CLEAR:
         try:
             PRINTER_AWAITING_PLATE_CLEAR = False
-            api.clear_plate(config["printer"]["id"])
+            with_network_connection(
+                lambda: api.clear_plate(config["printer"]["id"])
+            )
             PRINTER_STATUS_UPDATE_REQUIRED = True
 
         except Exception as exc:
@@ -104,7 +116,9 @@ def handle_printer_status_update():
     global CHAMBER_LIGHT_IS_ON
 
     try:
-        response = api.get_printer_status(config["printer"]["id"])
+        response = with_network_connection(
+            lambda: api.get_printer_status(config["printer"]["id"])
+        )
         PRINTER_AWAITING_PLATE_CLEAR = response["awaiting_plate_clear"]
         CHAMBER_LIGHT_IS_ON = response["chamber_light"]
 
@@ -118,6 +132,8 @@ def handle_printer_status_update():
 
 # -- Main loop --
 while True:
+    watchdog.feed()
+
     # Push button press to API if pending
     if PENDING_BUTTON_PRESS:
         handle_pending_button_press()
