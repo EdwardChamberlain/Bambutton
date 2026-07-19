@@ -6,7 +6,8 @@
   },
   "api": {
     "base_url": "http://<BAMBUDDY_IP>:<BAMBUDDY_PORT>/api/v1",
-    "key": "YOUR API KEY"
+    "key": "YOUR API KEY",
+    "request_timeout_seconds": 3
   },
   "printer": {
     "id": 1,

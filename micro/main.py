@@ -23,7 +23,9 @@ watchdog = WDT(timeout=60_000)
 # -- Initialize LED flasher ---
 flasher = led_flasher.LedFlasher(
     pin_number=config["led"]["pin"],
-    should_flash=lambda: PRINTER_AWAITING_PLATE_CLEAR,
+    should_flash=lambda: (
+        PRINTER_AWAITING_PLATE_CLEAR and not PENDING_BUTTON_PRESS
+    ),
     interval_ms=config["led"]["flash_interval_ms"],
     inactive_value=lambda: CHAMBER_LIGHT_IS_ON,
 )
@@ -33,9 +35,13 @@ flasher.start()
 # -- Button handler ---
 def IRQ_button_press(pin):
     global PENDING_BUTTON_PRESS
+    global PRINTER_AWAITING_PLATE_CLEAR
 
-    print("Button pressed on GPIO", config["button"]["pin"])
-    PENDING_BUTTON_PRESS = True
+    # This runs in the hardware interrupt. Keep it allocation-free so the LED
+    # stops flashing even while a status request is still timing out.
+    if PRINTER_AWAITING_PLATE_CLEAR:
+        PRINTER_AWAITING_PLATE_CLEAR = False
+        PENDING_BUTTON_PRESS = True
 
 
 button = gpio_button.GPIOButton(
@@ -67,6 +73,7 @@ except Exception as exc:
 api = bambuddy_api.BambuddyAPI(
     config["api"]["key"],
     config["api"]["base_url"],
+    config["api"]["request_timeout_seconds"],
 )
 
 
@@ -91,22 +98,16 @@ def with_network_connection(request):
 
 def handle_pending_button_press():
     global PENDING_BUTTON_PRESS
-    global PRINTER_AWAITING_PLATE_CLEAR
     global PRINTER_STATUS_UPDATE_REQUIRED
 
-    if PRINTER_AWAITING_PLATE_CLEAR:
-        try:
-            PRINTER_AWAITING_PLATE_CLEAR = False
-            with_network_connection(
-                lambda: api.clear_plate(config["printer"]["id"])
-            )
-            PRINTER_STATUS_UPDATE_REQUIRED = True
+    try:
+        with_network_connection(
+            lambda: api.clear_plate(config["printer"]["id"])
+        )
+        PRINTER_STATUS_UPDATE_REQUIRED = True
 
-        except Exception as exc:
-            print("Failed to send plate clear request:", exc)
-
-    else:
-        print("Button press ignored - printer not awaiting plate clear")
+    except Exception as exc:
+        print("Failed to send plate clear request:", exc)
 
     PENDING_BUTTON_PRESS = False
 

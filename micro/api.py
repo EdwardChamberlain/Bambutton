@@ -2,14 +2,19 @@ import urequests
 
 
 class API:
-    def __init__(self, api_key, base_url):
+    def __init__(self, api_key, base_url, request_timeout_seconds=3):
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
+        self.request_timeout_seconds = request_timeout_seconds
 
     def api_get(self, path, headers=None):
         response = None
         try:
-            response = urequests.get(self.api_url(path), headers=self.api_headers(headers))
+            response = urequests.get(
+                self.api_url(path),
+                headers=self.api_headers(headers),
+                timeout=self.request_timeout_seconds,
+            )
             return response.status_code, response.text
 
         finally:
@@ -25,6 +30,7 @@ class API:
                 self.api_url(path),
                 json=payload,
                 headers=request_headers,
+                timeout=self.request_timeout_seconds,
             )
             return response.status_code, response.text
 

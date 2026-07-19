@@ -334,6 +334,7 @@ def build_config(values, printers_by_label):
         "api": {
             "base_url": api_base_url_from_host(values["-API_HOST-"]),
             "key": values["-API_KEY-"].strip(),
+            "request_timeout_seconds": 3,
         },
         "printer": {
             "id": printers_by_label[selected_printer],

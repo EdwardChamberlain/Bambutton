@@ -1,9 +1,5 @@
 from machine import Pin
-import micropython
 import time
-
-
-micropython.alloc_emergency_exception_buf(100)
 
 
 class GPIOButton:
@@ -25,7 +21,6 @@ class GPIOButton:
             self.pin = Pin(pin_number, Pin.IN, pull)
         self.trigger = _resolve_trigger(trigger)
         self.last_press_ms = 0
-        self._scheduled_press = self._handle_scheduled_press
 
     def start(self):
         self.pin.irq(trigger=self.trigger, handler=self._irq)
@@ -39,13 +34,6 @@ class GPIOButton:
             return
 
         self.last_press_ms = now
-
-        try:
-            micropython.schedule(self._scheduled_press, pin)
-        except RuntimeError:
-            pass
-
-    def _handle_scheduled_press(self, pin):
         self.on_press(pin)
 
 

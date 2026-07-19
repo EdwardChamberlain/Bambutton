@@ -13,6 +13,7 @@ DEFAULT_CONFIG = {
     "api": {
         "base_url": "",
         "key": "",
+        "request_timeout_seconds": 3,
     },
     "printer": {
         "id": 3,

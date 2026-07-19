@@ -128,7 +128,8 @@ Manual users can edit `micro/config.json` before copying the files to the board:
   },
   "api": {
     "base_url": "http://your-server-ip:8000/api/v1",
-    "key": "your-api-key"
+    "key": "your-api-key",
+    "request_timeout_seconds": 3
   },
   "printer": {
     "id": 3,
