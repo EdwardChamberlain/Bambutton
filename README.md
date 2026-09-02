@@ -37,6 +37,37 @@ Manual setup requires:
 - A data-capable USB cable.
 - Knowing the serial port if `mpremote` cannot auto-detect the board.
 
+### On-Device Setup Portal (no PC app required)
+
+As an alternative to the desktop assistant, a board can be configured entirely from a phone or browser once the MicroPython firmware and app files are on it.
+
+On first boot — or whenever no Wi-Fi is stored, or the button is held down at power-on — the board starts its own access point **Bambutton-Setup** (default password `bambutton`) and serves a captive setup page:
+
+1. Connect a phone to **Bambutton-Setup**.
+2. Choose your Wi-Fi network, enter the password, and save. The board joins your network and reboots.
+3. The same page is then reachable in a browser at the board's LAN IP (`http://<board-ip>/`), where you enter the Bambuddy address and API key, test the connection, and assign a printer to each button.
+
+Wi-Fi and Bambuddy are configured in separate steps, so you can store Wi-Fi while on a phone/guest network and finish Bambuddy setup later from a PC on the LAN.
+
+## Multiple Printers on One Board
+
+The config describes a list of **stations** — each station is one printer with its own button and LED — so a single ESP32-C3 can drive two (or more) buttons for two printers. One Bambuddy API key works for every station. Default wiring:
+
+```text
+Station A:  LED = GPIO3,  button = GPIO4
+Station B:  LED = GPIO5,  button = GPIO6
+```
+
+In the setup page each button has a **🔦 identify** control that blinks the selected station's LED for a few seconds, so you can tell which physical button you are assigning to which printer.
+
+### Updating over the air (optional)
+
+The setup page can update the app code (the `micro/*.py` files, not the MicroPython firmware itself) without a USB cable: either pull a `manifest.json` plus files from a URL you control, or upload `.py`/`.json` files directly from the browser.
+
+### Backward compatibility
+
+Existing single-printer `config.json` files (the `printer` / `led.pin` / `button.pin` schema written by the desktop assistant) are migrated automatically into the first station when loaded, so boards configured the old way keep working.
+
 ## Layout
 
 ```text
@@ -59,6 +90,10 @@ Key files:
 - `micro/wifi.py` - Wi-Fi connection helper.
 - `micro/gpio_button.py` - debounced GPIO interrupt button helper.
 - `micro/led_flasher.py` - timer-driven LED flasher.
+- `micro/runner.py` - normal-mode loop: multi-station polling, LED logic, and the LAN config server.
+- `micro/webconfig.py` - on-device setup/config web portal (AP captive page + LAN page), OTA update, identify.
+- `micro/provisioning.py` - setup-mode entry point that starts the AP portal.
+- `micro/bb_util.py` - shared helpers (base-URL normalising, printer-name matching).
 - `firmware/ESP32_GENERIC_C3-20260406-v1.28.0.bin` - bundled ESP32-C3 MicroPython firmware image.
 - `scripts/push_micro.py` - copies required MicroPython files to the board with `mpremote`.
 - `scripts/run_main.py` - runs `micro/main.py` on the board without copying it as an auto-start file.
@@ -117,7 +152,7 @@ The macOS app is written to `dist/Bambutton.app`. The Windows executable is writ
 
 ## Manual Configuration
 
-Manual users can edit `micro/config.json` before copying the files to the board:
+Most users never touch `config.json` — the on-device setup portal writes it. Manual users can still edit `micro/config.json` before copying the files to the board. See `micro/config_example.json` for the full schema:
 
 ```json
 {
@@ -131,22 +166,30 @@ Manual users can edit `micro/config.json` before copying the files to the board:
     "key": "your-api-key",
     "request_timeout_seconds": 3
   },
-  "printer": {
-    "id": 3,
-    "poll_interval_seconds": 5
-  },
+  "poll_interval_seconds": 3,
   "led": {
-    "pin": 3,
     "flash_interval_ms": 250
   },
   "button": {
-    "pin": 4,
     "debounce_ms": 150,
     "pull": "down",
     "trigger": "rising"
-  }
+  },
+  "ap": {
+    "ssid": "Bambutton-Setup",
+    "password": "bambutton"
+  },
+  "update": {
+    "url": ""
+  },
+  "stations": [
+    {"printer_id": "PRINTER NAME OR NUMERIC ID", "led_pin": 3, "button_pin": 4},
+    {"printer_id": "", "led_pin": 5, "button_pin": 6}
+  ]
 }
 ```
+
+`printer_id` accepts either the printer's Bambuddy friendly name (case-insensitive, partial match allowed) or its numeric id. Leave a station's `printer_id` empty to disable it. Older single-printer configs using the `printer` / `led.pin` / `button.pin` keys are migrated automatically. The optional top-level `hostname` (default `bambutton`) is announced to the router so the board is easy to find in the client list.
 
 ## Manual Copying
 

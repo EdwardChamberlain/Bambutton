@@ -4,23 +4,30 @@
     "password": "YOUR WIFI PASSWORD",
     "timeout_seconds": 10
   },
+  "hostname": "bambutton",
   "api": {
     "base_url": "http://<BAMBUDDY_IP>:<BAMBUDDY_PORT>/api/v1",
     "key": "YOUR API KEY",
     "request_timeout_seconds": 3
   },
-  "printer": {
-    "id": 1,
-    "poll_interval_seconds": 3
-  },
+  "poll_interval_seconds": 3,
   "led": {
-    "pin": 3,
     "flash_interval_ms": 250
   },
   "button": {
-    "pin": 4,
     "debounce_ms": 150,
     "pull": "down",
     "trigger": "rising"
-  }
+  },
+  "ap": {
+    "ssid": "Bambutton-Setup",
+    "password": "bambutton"
+  },
+  "update": {
+    "url": ""
+  },
+  "stations": [
+    {"printer_id": "PRINTER NAME OR NUMERIC ID", "led_pin": 3, "button_pin": 4},
+    {"printer_id": "", "led_pin": 5, "button_pin": 6}
+  ]
 }
