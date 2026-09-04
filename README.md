@@ -66,6 +66,9 @@ Key files:
 - `src/bambutton/gui.py` - GUI for selecting firmware, board, pins, Wi-Fi, API key, and printer.
 - `src/bambutton_config_gui.py` - compatibility launcher for running the GUI from source.
 
+The firmware sets the board's network hostname to `bambutton` before connecting to Wi-Fi,
+so DHCP and mDNS-capable networks can identify it more easily.
+
 ## Setup Assistant GUI
 
 For end users, use the built installer when available.
