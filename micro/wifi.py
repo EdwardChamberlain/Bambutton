@@ -2,6 +2,9 @@ import network
 import time
 
 
+DEFAULT_HOSTNAME = "bambutton"
+
+
 class WiFi:
     def __init__(
         self,
@@ -21,6 +24,8 @@ class WiFi:
         self.wlan = network.WLAN(network.STA_IF)
 
     def connect(self):
+        # Set this before activating the interface so DHCP and mDNS can use it.
+        network.hostname(DEFAULT_HOSTNAME)
         self.wlan.active(True)
         # self.wlan.config(txpower=8.5)
 
