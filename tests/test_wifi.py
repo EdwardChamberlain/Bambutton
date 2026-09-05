@@ -9,11 +9,18 @@ WIFI_PATH = Path(__file__).parents[1] / "micro" / "wifi.py"
 
 def load_wifi_module(monkeypatch, events):
     class FakeWLAN:
+        PM_NONE = "pm-none"
+
         def __init__(self, interface):
             self.connected = False
+            self.config_calls = []
 
         def active(self, enabled):
             events.append(("active", enabled))
+
+        def config(self, **kwargs):
+            self.config_calls.append(kwargs)
+            events.append(("config", kwargs))
 
         def connect(self, ssid, password):
             events.append(("connect", ssid, password))
@@ -49,8 +56,18 @@ def test_connect_sets_default_hostname_before_activating_wifi(monkeypatch):
 
     wifi_module.WiFi("ssid", "password").connect()
 
-    assert events[:3] == [
+    assert events[:4] == [
         ("hostname", "bambutton"),
         ("active", True),
+        ("config", {"pm": "pm-none"}),
         ("connect", "ssid", "password"),
     ]
+
+
+def test_connect_disables_wifi_power_management(monkeypatch):
+    wifi_module = load_wifi_module(monkeypatch, [])
+    wifi = wifi_module.WiFi("ssid", "password")
+
+    wlan = wifi.connect()
+
+    assert wlan.config_calls == [{"pm": "pm-none"}]

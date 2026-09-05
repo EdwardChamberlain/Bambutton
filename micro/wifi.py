@@ -28,6 +28,7 @@ class WiFi:
         network.hostname(DEFAULT_HOSTNAME)
         self.wlan.active(True)
         # self.wlan.config(txpower=8.5)
+        self.wlan.config(pm=network.WLAN.PM_NONE)
 
         if not self.wlan.isconnected():
             print("Connecting to Wi-Fi:", self.ssid)
