@@ -168,7 +168,9 @@ def build_window():
                 expand_x=True,
                 background_color=input_background_color,
                 text_color=text_color,
-                pad=(4, 0),
+                font=("Helvetica", 11),
+                border_width=1,
+                pad=(4, 1),
             ),
             sg.FileBrowse(
                 "Browse",
