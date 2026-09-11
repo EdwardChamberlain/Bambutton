@@ -150,12 +150,14 @@ def test_web_pages_use_mobile_first_responsive_layout():
         )
         assert "*, *::before, *::after { box-sizing: border-box; }" in page
         assert "input, select {" in page
-        assert "button {" in page
         assert "display: block; width: 100%;" in page
         assert "fieldset {" in page
         assert "min-width: 0;" in page
         assert "overflow-wrap: anywhere;" in page
         assert "@media (min-width: 40rem)" in page
+        button_rule = page.split("    button {", 1)[1].split("}", 1)[0]
+        assert "display: block;" in button_rule
+        assert "width: 100%;" in button_rule
 
 
 def test_debug_page_does_not_expose_secrets():
