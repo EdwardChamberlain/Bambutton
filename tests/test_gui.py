@@ -152,14 +152,9 @@ def test_handle_save_example_config_populates_path(tmp_path, monkeypatch):
     window = Window()
 
     monkeypatch.setattr(gui, "CONFIG_EXAMPLE_PATH", example_path)
-    monkeypatch.setattr(
-        gui.sg,
-        "popup_get_file",
-        lambda *args, **kwargs: str(target_path),
-        raising=False,
-    )
+    monkeypatch.setattr(gui, "select_example_config_path", lambda window: str(target_path))
 
-    gui.handle_save_example_config(window, {})
+    gui.handle_save_example_config(window)
 
     assert target_path.read_text() == example_path.read_text()
     assert {"value": str(target_path)} in window.elements["-CONFIG_PATH-"].updates

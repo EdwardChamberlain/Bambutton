@@ -62,7 +62,7 @@ def main():
                 update_action_states(window, values)
 
             if event == "-SAVE_EXAMPLE-":
-                handle_save_example_config(window, values)
+                handle_save_example_config(window)
 
             if event == "-FLASH-":
                 handle_flash(window, values)
@@ -225,15 +225,20 @@ def build_window():
     return window
 
 
-def handle_save_example_config(window, values):
-    target = sg.popup_get_file(
-        "Save example configuration",
+def select_example_config_path(window):
+    from tkinter import filedialog
+
+    return filedialog.asksaveasfilename(
+        parent=window.TKroot,
         title="Save example configuration",
-        default_path="config.json",
-        default_extension=".json",
-        save_as=True,
-        file_types=(("JSON configuration", "*.json"), ("All files", "*.*")),
+        initialfile="config.json",
+        defaultextension=".json",
+        filetypes=(("JSON configuration", "*.json"), ("All files", "*.*")),
     )
+
+
+def handle_save_example_config(window):
+    target = select_example_config_path(window)
     if not target:
         return
 
