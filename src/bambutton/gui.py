@@ -150,18 +150,6 @@ def build_window():
                 expand_x=True,
             ),
         ],
-        [
-            sg.Text("", size=(16, 1)),
-            sg.Button(
-                "Save example config...",
-                key="-SAVE_EXAMPLE-",
-                size=(24, 1),
-                button_color=(text_color, secondary_button_color),
-                mouseover_colors=(text_color, secondary_button_color),
-                font=("Helvetica", 10),
-                pad=(0, (2, 0)),
-            ),
-        ],
         [sg.HorizontalSeparator(color=divider_color, pad=(0, (12, 10)))],
         [
             sg.Text(
@@ -186,6 +174,16 @@ def build_window():
                 target="-CONFIG_PATH-",
                 file_types=(("JSON configuration", "*.json"), ("All files", "*.*")),
                 button_color=(text_color, secondary_button_color),
+            ),
+            sg.Button(
+                "⇩",
+                key="-SAVE_EXAMPLE-",
+                size=(3, 1),
+                tooltip="Save example configuration",
+                button_color=(text_color, secondary_button_color),
+                mouseover_colors=(text_color, secondary_button_color),
+                font=("Helvetica", 13),
+                pad=(4, 0),
             ),
         ],
         [sg.HorizontalSeparator(color=divider_color, pad=(0, (12, 10)))],
