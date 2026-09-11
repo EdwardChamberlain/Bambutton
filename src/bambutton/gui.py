@@ -164,9 +164,11 @@ def build_window():
             sg.Input(
                 key="-CONFIG_PATH-",
                 enable_events=True,
+                size=(32, 1),
                 expand_x=True,
                 background_color=input_background_color,
                 text_color=text_color,
+                pad=(4, 0),
             ),
             sg.FileBrowse(
                 "Browse",
@@ -174,6 +176,9 @@ def build_window():
                 target="-CONFIG_PATH-",
                 file_types=(("JSON configuration", "*.json"), ("All files", "*.*")),
                 button_color=(text_color, secondary_button_color),
+                size=(8, 1),
+                font=("Helvetica", 10),
+                pad=(4, 0),
             ),
             sg.Button(
                 "⇩",
@@ -182,7 +187,7 @@ def build_window():
                 tooltip="Save example configuration",
                 button_color=(text_color, secondary_button_color),
                 mouseover_colors=(text_color, secondary_button_color),
-                font=("Helvetica", 13),
+                font=("Helvetica", 10, "bold"),
                 pad=(4, 0),
             ),
         ],
