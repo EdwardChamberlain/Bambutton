@@ -168,9 +168,9 @@ def build_window():
                 expand_x=True,
                 background_color=input_background_color,
                 text_color=text_color,
-                font=("Helvetica", 11),
+                font=("Helvetica", 10),
                 border_width=1,
-                pad=(4, 1),
+                pad=(4, 0),
             ),
             sg.FileBrowse(
                 "Browse",
@@ -228,8 +228,24 @@ def build_window():
     ]
 
     window = sg.Window("Bambutton Setup", layout, finalize=True)
+    match_config_input_height(window)
     update_action_states(window, window.read(timeout=0)[1])
     return window
+
+
+def match_config_input_height(window):
+    """Make the single-line path input as tall as the adjacent buttons."""
+    window.TKroot.update_idletasks()
+
+    input_widget = window["-CONFIG_PATH-"].Widget
+    button_heights = [
+        window[key].Widget.winfo_height()
+        for key in ("-CONFIG_BROWSE-", "-SAVE_EXAMPLE-")
+    ]
+    extra_height = max(button_heights) - input_widget.winfo_height()
+    if extra_height > 0:
+        input_widget.pack_configure(ipady=(extra_height + 1) // 2)
+        window.TKroot.update_idletasks()
 
 
 def select_example_config_path(window):
