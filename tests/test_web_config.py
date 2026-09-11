@@ -138,6 +138,26 @@ def test_config_page_contains_form_and_does_not_require_formatting_js():
     assert "__HOSTNAME__" not in page
 
 
+def test_web_pages_use_mobile_first_responsive_layout():
+    pages = (
+        web_config.render_config_page(base_config()),
+        web_config.render_debug_page(base_config(), {}),
+    )
+    for page in pages:
+        assert (
+            '<meta name="viewport" content="width=device-width, initial-scale=1">'
+            in page
+        )
+        assert "*, *::before, *::after { box-sizing: border-box; }" in page
+        assert "input, select {" in page
+        assert "button {" in page
+        assert "display: block; width: 100%;" in page
+        assert "fieldset {" in page
+        assert "min-width: 0;" in page
+        assert "overflow-wrap: anywhere;" in page
+        assert "@media (min-width: 40rem)" in page
+
+
 def test_debug_page_does_not_expose_secrets():
     page = web_config.render_debug_page(base_config(), {"IP address": "192.168.1.20"})
 

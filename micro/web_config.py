@@ -523,15 +523,49 @@ def _page(title, content):
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{}</title>
   <style>
-    body {{ font: 16px sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; color: #222; }}
-    fieldset {{ margin: 1rem 0; border: 1px solid #bbb; border-radius: 6px; }}
-    label {{ display: block; margin: .8rem 0; }}
-    input, select {{ box-sizing: border-box; max-width: 100%; padding: .45rem; width: 28rem; }}
-    button {{ padding: .55rem .8rem; margin: .25rem .25rem .25rem 0; }}
-    .message {{ background: #e5f5e5; padding: .8rem; border-radius: 4px; }}
-    #printer-status {{ margin-left: .5rem; }}
-    table {{ border-collapse: collapse; width: 100%; }}
-    th, td {{ border: 1px solid #bbb; padding: .5rem; text-align: left; }}
+    *, *::before, *::after {{ box-sizing: border-box; }}
+    html {{ background: #f5f5f5; }}
+    body {{
+      width: 100%; max-width: 48rem; min-height: 100vh; margin: 0 auto;
+      padding: 1rem; font: 16px/1.5 sans-serif; color: #222; background: #fff;
+    }}
+    h1 {{
+      font-size: clamp(1.5rem, 7vw, 2rem); line-height: 1.2;
+      overflow-wrap: anywhere;
+    }}
+    fieldset {{
+      min-width: 0; margin: 1rem 0; padding: .75rem;
+      border: 1px solid #bbb; border-radius: 6px;
+    }}
+    legend {{ padding: 0 .25rem; font-weight: 700; }}
+    label {{ display: block; margin: .9rem 0; }}
+    input, select, button {{ font: inherit; }}
+    input, select {{
+      display: block; width: 100%; min-height: 2.75rem;
+      margin-top: .35rem; padding: .55rem .65rem;
+    }}
+    button {{
+      display: block; width: 100%; min-height: 2.75rem;
+      margin: .5rem 0; padding: .55rem .8rem;
+      white-space: normal; overflow-wrap: anywhere;
+    }}
+    .message {{
+      background: #e5f5e5; padding: .8rem; border-radius: 4px;
+      overflow-wrap: anywhere;
+    }}
+    #printer-status {{ display: block; margin-top: .5rem; overflow-wrap: anywhere; }}
+    table {{ border-collapse: collapse; width: 100%; table-layout: fixed; }}
+    th, td {{
+      width: 40%; border: 1px solid #bbb; padding: .5rem;
+      text-align: left; vertical-align: top; overflow-wrap: anywhere;
+    }}
+    td {{ width: 60%; }}
+    @media (min-width: 40rem) {{
+      body {{ padding: 2rem 1.5rem; }}
+      input, select {{ max-width: 28rem; }}
+      button {{ display: inline-block; width: auto; }}
+      #printer-status {{ display: inline; margin-top: 0; margin-left: .5rem; }}
+    }}
   </style>
 </head>
 <body>{}</body>
