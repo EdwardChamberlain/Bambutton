@@ -174,10 +174,11 @@ def build_window():
                 border_width=1,
                 pad=(4, 0),
             ),
-            sg.FileBrowse(
+            sg.Button(
                 "Browse",
                 key="-CONFIG_BROWSE-",
                 target="-CONFIG_PATH-",
+                button_type=sg.BUTTON_TYPE_BROWSE_FILE,
                 file_types=(("JSON configuration", "*.json"), ("All files", "*.*")),
                 button_color=(text_color, secondary_button_color),
                 disabled_button_color=(disabled_button_text_color, disabled_button_color),
