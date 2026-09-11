@@ -78,6 +78,8 @@ def build_window():
     divider_color = "#343B47"
     primary_button_color = "#2563EB"
     secondary_button_color = "#2B313B"
+    disabled_button_color = "#151A21"
+    disabled_button_text_color = "#667085"
 
     sg.theme("DarkGrey13")
     sg.theme_background_color(background_color)
@@ -178,6 +180,8 @@ def build_window():
                 target="-CONFIG_PATH-",
                 file_types=(("JSON configuration", "*.json"), ("All files", "*.*")),
                 button_color=(text_color, secondary_button_color),
+                disabled_button_color=(disabled_button_text_color, disabled_button_color),
+                mouseover_colors=(text_color, secondary_button_color),
                 size=(8, 1),
                 font=("Helvetica", 10),
                 pad=(4, 0),
@@ -188,6 +192,7 @@ def build_window():
                 size=(3, 1),
                 tooltip="Save example configuration",
                 button_color=(text_color, secondary_button_color),
+                disabled_button_color=(disabled_button_text_color, disabled_button_color),
                 mouseover_colors=(text_color, secondary_button_color),
                 font=("Helvetica", 10, "bold"),
                 pad=(4, 0),
@@ -221,6 +226,7 @@ def build_window():
                 expand_x=True,
                 pad=(0, (0, 6)),
                 button_color=("#FFFFFF", primary_button_color),
+                disabled_button_color=(disabled_button_text_color, disabled_button_color),
                 mouseover_colors=("#FFFFFF", primary_button_color),
                 font=("Helvetica", 10, "bold"),
             )
