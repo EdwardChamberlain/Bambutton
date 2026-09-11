@@ -18,13 +18,17 @@ Most users should use the setup assistant GUI. Release builds will be published 
 
 The GUI guides the user through:
 
-- Selecting the MicroPython firmware `.bin`.
-- Selecting a connected ESP32-C3 board.
-- Entering Bambuddy API connection details.
-- Fetching printers from Bambuddy and choosing by friendly name.
-- Setting the LED pin, button pin, Wi-Fi SSID, and Wi-Fi password.
-- Flashing firmware and required code.
-- Pushing settings-only updates.
+- Choosing either Web GUI setup or Config based setup.
+- Automatically detecting the connected ESP32-C3; no serial port selection is required.
+- Flashing the bundled generic MicroPython firmware and application files.
+- Selecting an existing `config.json`, or saving an example configuration to
+  edit before flashing.
+
+Web GUI setup installs the generic firmware and application without a saved
+configuration. The firmware defaults use the board's setup access point when no
+Wi-Fi connection is available. Complete the board configuration from the web
+page after flashing. Config based setup installs the selected configuration file
+directly.
 
 ### Advanced: Manual Flashing
 
@@ -63,7 +67,7 @@ Key files:
 - `scripts/push_micro.py` - copies required MicroPython files to the board with `mpremote`.
 - `scripts/run_main.py` - runs `micro/main.py` on the board without copying it as an auto-start file.
 - `scripts/build_gui.py` - builds the distributable setup assistant executable with PyInstaller.
-- `src/bambutton/gui.py` - GUI for selecting firmware, board, pins, Wi-Fi, API key, and printer.
+- `src/bambutton/gui.py` - GUI for selecting a setup mode and configuration file.
 - `src/bambutton_config_gui.py` - compatibility launcher for running the GUI from source.
 
 The firmware sets the board's network hostname to `bambutton` before connecting to Wi-Fi,

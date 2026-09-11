@@ -7,3 +7,4 @@ def test_release_gui_includes_all_micro_python_modules():
     build_script = runpy.run_path(str(project_root / "scripts" / "build_gui.py"))
 
     assert "web_config.py" in build_script["MICRO_FILES"]
+    assert "config_example.json" in build_script["MICRO_FILES"]
