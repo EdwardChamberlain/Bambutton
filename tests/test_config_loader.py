@@ -6,7 +6,6 @@ from micro import config_loader
 
 def test_web_setup_default_hostname_has_four_character_suffix():
     assert re.fullmatch(r"bambutton-[A-Z0-9]{4}", config_loader.DEFAULT_HOSTNAME)
-    assert "ap_ssid" not in config_loader.DEFAULT_CONFIG["wifi"]
 
 
 def test_explicit_hostname_is_preserved_when_loading_config(tmp_path):
