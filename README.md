@@ -1,270 +1,152 @@
 # Bambutton
+A physical plate-clear button for Bambuddy
 
 ![Bambutton in use on a P1S](assets/inuse.png)
 
-A physical plate-clear button for Bambuddy.
+Bambutton turns a small ESP32-C3 board into a dedicated wireless control for your printer. The LED ring flashes to show when a plate needs clearing, and one button press marks the plate as clear in Bambuddy so the next queued job can be despatched automatically.
 
-Bambutton turns a small ESP32-C3 board into a dedicated wireless control for your printer. The LED ring shows when a plate needs clearing, and one button press marks the plate as clear in Bambuddy so the next queued job can be despatched automatically.
+It gives each printer a simple shop-floor control that is easy to see, quick to press, and smoother than opening the Bambuddy interface every time.
 
-It gives each printer a simple shop-floor control that is quick to see, quick to press, and easier than opening the Bambuddy interface every time.
+## Contents
 
-## Setup Routes
+- [Flashing Tool](#flashing-tool)
+- [Manual Flashing](#manual-flashing)
+  - [Configure the board](#configure-the-board)
+  - [Run without auto-start](#run-without-auto-start)
+- [Web GUI](#web-gui)
+- [Release Packaging](#release-packaging)
+- [Hardware](#hardware)
+  - [Purchased Parts](#purchased-parts)
+  - [Printed Parts](#printed-parts)
+  - [Wiring Notes](#wiring-notes)
 
-There are two supported ways to configure a board.
+## Flashing Tool
 
-### Recommended: Setup Assistant GUI
+For the simplest setup, download the [latest release](https://github.com/EdwardChamberlain/Bambutton/releases/latest)
+and run the Bambutton setup assistant. It detects the connected ESP32-C3 automatically, flashes the bundled
+MicroPython firmware and application files, and offers two setup modes:
 
-Most users should use the setup assistant GUI. Release builds will be published so users will not need to install Python, `mpremote`, or `esptool` themselves.
+- **Web GUI setup** flashes the board without a saved configuration. Configure
+  it from the board's web page after flashing.
+- **Config-based setup** flashes an existing `config.json`. The assistant can
+  save an example configuration for you to edit first.
 
-The GUI guides the user through:
+The release tool does not require Python, `mpremote`, or `esptool`. Connect the
+board with a data-capable USB cable before starting the flash.
 
-- Choosing either Web GUI setup or Config based setup.
-- Automatically detecting the connected ESP32-C3; no serial port selection is required.
-- Flashing the bundled generic MicroPython firmware and application files.
-- Selecting an existing `config.json`, or saving an example configuration to
-  edit before flashing.
-
-Web GUI setup installs the generic firmware and application without a saved
-configuration. The firmware defaults use the board's setup access point when no
-Wi-Fi connection is available. Complete the board configuration from the web
-page after flashing. Config based setup installs the selected configuration file
-directly.
-
-### Advanced: Manual Flashing
-
-Advanced users can use the Python scripts and command-line tools directly. This is useful for development, debugging, or working outside the packaged release assistant.
-
-Manual setup requires:
-
-- Python installed locally.
-- Dependencies from `requirements.txt`.
-- A data-capable USB cable.
-- Knowing the serial port if `mpremote` cannot auto-detect the board.
-
-## Layout
-
-```text
-.
-├── firmware/   MicroPython firmware binaries for the board
-├── micro/      MicroPython source files copied to the ESP32-C3
-├── scripts/    Local helper scripts
-└── src/        PC-side setup GUI
-```
-
-Whilst this repo does carry a firmware binary for the ESP32-C3 Generic board I strongly recommend using the latest version from the [micropython website](https://micropython.org/download/ESP32_GENERIC_C3/?utm_source=chatgpt.com)
-
-Key files:
-
-- `micro/main.py` - board entry point and application loop.
-- `micro/config.json` - runtime configuration loaded by the board at boot.
-- `micro/config_loader.py` - config loader with defaults.
-- `micro/api.py` - low-level API-key HTTP client.
-- `micro/bambuddy_api.py` - route-level Bambuddy API wrapper.
-- `micro/wifi.py` - Wi-Fi connection helper.
-- `micro/gpio_button.py` - debounced GPIO interrupt button helper.
-- `micro/led_flasher.py` - timer-driven LED flasher.
-- `firmware/ESP32_GENERIC_C3-20260406-v1.28.0.bin` - bundled ESP32-C3 MicroPython firmware image.
-- `scripts/push_micro.py` - copies required MicroPython files to the board with `mpremote`.
-- `scripts/run_main.py` - runs `micro/main.py` on the board without copying it as an auto-start file.
-- `scripts/build_gui.py` - builds the distributable setup assistant executable with PyInstaller.
-- `src/bambutton/gui.py` - GUI for selecting a setup mode and configuration file.
-- `src/bambutton_config_gui.py` - compatibility launcher for running the GUI from source.
-
-Web GUI setup generates a pseudo-random hostname such as `bambutton-ABCD` when
-the board boots without a saved configuration. The same hostname is used for
-the fallback setup access point, so multiple freshly flashed boards can be
-identified separately. Config based setup respects the hostname in the supplied
-configuration file.
-
-Wi-Fi connection timeouts apply to individual connection attempts. If the board
-cannot connect within the configured timeout, it starts the password-protected
-setup access point described below while the LED shows the connection-failure
-pattern. Saving settings restarts the firmware so it can retry the configured
-network.
-
-## Web Configuration
-
-After the board joins its configured Wi-Fi network, open the board's hostname or
-assigned IP address in a browser. The built-in configuration page
-can update the hostname, Wi-Fi credentials, Bambuddy API details, printer, and
-GPIO pins without a USB connection. Use **Load printers from Bambuddy** to
-populate the printer selector from the configured API.
-
-Saving settings writes the board's `config.json` and restarts the firmware so
-changes such as a new Wi-Fi network or hostname take effect. The debug page
-shows current network and application state without exposing the API key,
-Wi-Fi password, or web password. All routes, including the setup access point,
-require HTTP Basic authentication using username `admin` and the password in
-`web.password`. The default username is `admin` and the default password is
-`bambutton`; change the password from the configuration page or in
-`config.json` before relying on the web UI. If the board cannot connect to its
-configured Wi-Fi within the connection timeout, it starts a password-protected
-setup access point named after its hostname with password `bambutton`. Connect
-to that network and open `http://192.168.4.1/` to correct the Wi-Fi settings.
-Saving settings restarts the board so it can retry the configured network. The
-setup network's SSID always follows `wifi.hostname`; its password can be
-changed in `wifi.ap_password` before flashing the configuration.
-
-## Setup Assistant GUI
-
-For end users, use the built installer when available.
-
-For development, run the GUI from source:
+To run the assistant from source during development:
 
 ```bash
 python -m pip install -r requirements.txt
 python src/bambutton_config_gui.py
 ```
 
-After installing the package, the GUI can also be launched with:
+## Manual Flashing
+
+Use this route for development or when you prefer the command line. You need
+Python, a data-capable USB cable, and an ESP32-C3 connected over USB.
+
+Create and activate a virtual environment, then install the flashing tools:
 
 ```bash
-bambutton
+python -m venv .venv
 ```
 
-## Release Packaging
-
-Package versions are derived from Git tags via `hatch-vcs`. Tags that start with `v` runs the GitHub release workflow:
+On macOS or Linux, activate it with:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+source .venv/bin/activate
 ```
 
-The workflow builds and attaches:
+On Windows PowerShell, activate it with:
 
-- `Bambutton-windows.zip` - Windows executable.
-- `Bambutton-macos.zip` - macOS app bundle.
-- Python wheel and source distribution artifacts.
+```powershell
+.venv\Scripts\Activate.ps1
+```
 
-Local build commands are still available for development.
-
-Build Python distribution artifacts:
+Then install the flashing tools:
 
 ```bash
-python -m pip install ".[dev]"
-python -m build
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 ```
 
-Build the setup assistant executable:
+### Configure the board
+
+Edit `micro/config.json` with the Wi-Fi network, Bambuddy API URL and key, the
+printer ID, and any hardware pin changes. The default wiring is GPIO 3 for the
+LED and GPIO 4 for the button. `micro/config_example.json` is a clean template
+if you need one.
+
+Erase the board, flash the bundled ESP32-C3 MicroPython firmware, and copy the
+application files:
 
 ```bash
-python scripts/build_gui.py
+python -m esptool --chip esp32c3 --port /dev/tty.usbmodemXXXX erase_flash
+python -m esptool --chip esp32c3 --port /dev/tty.usbmodemXXXX write_flash -z 0x0 firmware/ESP32_GENERIC_C3-20260406-v1.28.0.bin
+python scripts/push_micro.py --clean
 ```
 
-The macOS app is written to `dist/Bambutton.app`. The Windows executable is written to `dist/Bambutton.exe`. Release builds should attach the zipped app/executable so normal users can use the GUI route without installing Python.
-
-## Manual Configuration
-
-Manual users can edit `micro/config.json` before copying the files to the board:
-
-```json
-{
-  "wifi": {
-    "ssid": "your-wifi-ssid",
-    "password": "your-wifi-password",
-    "hostname": "bambutton",
-    "timeout_seconds": 10,
-    "ap_password": "bambutton"
-  },
-  "api": {
-    "base_url": "http://your-server-ip:8000/api/v1",
-    "key": "your-api-key",
-    "request_timeout_seconds": 3
-  },
-  "printer": {
-    "id": 3,
-    "poll_interval_seconds": 5
-  },
-  "led": {
-    "pin": 3,
-    "flash_interval_ms": 250
-  },
-  "button": {
-    "pin": 4,
-    "debounce_ms": 150,
-    "pull": "down",
-    "trigger": "rising"
-  },
-  "web": {
-    "password": "change-this-password"
-  }
-}
-```
-
-## Manual Copying
-
-With `mpremote` installed and the ESP32-C3 connected:
+Replace `/dev/tty.usbmodemXXXX` with the board's serial port. `mpremote` can
+usually find the port automatically; if it cannot, pass it to the copy script:
 
 ```bash
-scripts/push_micro.py
+python scripts/push_micro.py --clean --device /dev/tty.usbmodemXXXX
 ```
 
-To push only configuration changes:
+The copy script resets the board when it finishes. To update only the
+configuration later:
 
 ```bash
 mpremote cp micro/config.json :
 mpremote reset
 ```
 
-To wipe the board filesystem before copying the project files:
+The repository includes a firmware image for the ESP32-C3 Generic board. Check
+the [latest MicroPython ESP32-C3 release](https://micropython.org/download/ESP32_GENERIC_C3/)
+if you want to use a newer compatible image.
+
+### Run without auto-start
+
+To copy support files without installing `main.py` as the board's auto-starting
+application, then run it from the host:
 
 ```bash
-scripts/push_micro.py --clean
+python scripts/push_micro.py --clean --no-main
+python scripts/run_main.py
 ```
 
-To copy support files without `main.py`, preventing the app from auto-starting:
+Pass `--device /dev/tty.usbmodemXXXX` to either script when automatic port
+detection is unavailable.
+
+## Web GUI
+
+After flashing with Web GUI setup, the board starts a setup access point when it
+cannot connect to configured Wi-Fi. Connect to the board's wifi (for
+example, `bambutton-ABCD`) with and use username `admin`, password `bambutton`, then open
+`http://192.168.4.1/`. Enter the Wi-Fi, Bambuddy API,
+printer, and pin settings and choose **Save and restart**.
+
+Once connected to Wi-Fi, open the board's hostname or assigned IP address. The
+page can load printers from Bambuddy and update the board without USB. The debug page reports
+runtime state without exposing secrets.
+
+## Release Packaging
+
+Package versions are derived from Git tags via `hatch-vcs`. A tag beginning with
+`v` starts the GitHub release workflow:
 
 ```bash
-scripts/push_micro.py --no-main
+git tag v0.1.0
+git push origin v0.1.0
 ```
 
-To wipe the board and leave it without an auto-starting `main.py`:
+The workflow attaches Windows and macOS setup-tool archives, plus a Python
+wheel and source distribution. To build the Python distribution locally:
 
 ```bash
-scripts/push_micro.py --clean --no-main
-```
-
-If `mpremote` needs an explicit serial port:
-
-```bash
-scripts/push_micro.py --device /dev/tty.usbmodemXXXX
-```
-
-## Manual Run Without Auto-Start
-
-To launch `micro/main.py` manually from your computer:
-
-```bash
-scripts/run_main.py
-```
-
-This relies on `mpremote` auto-detecting the connected board. If needed, pass the device explicitly:
-
-```bash
-scripts/run_main.py --device /dev/tty.usbmodemXXXX
-```
-
-The support modules and `config.json` still need to exist on the board. A typical development flow is:
-
-```bash
-scripts/push_micro.py --clean --nomain
-scripts/run_main.py
-```
-
-## Manual Firmware Flashing
-
-The GUI also performs these steps. Advanced users can run them manually with `esptool.py`, replacing the serial port with the board's port:
-
-```bash
-esptool.py --chip esp32c3 --port /dev/tty.usbmodemXXXX erase_flash
-esptool.py --chip esp32c3 --port /dev/tty.usbmodemXXXX write_flash -z 0x0 firmware/ESP32_GENERIC_C3-20260406-v1.28.0.bin
-```
-
-After flashing firmware, copy the MicroPython files:
-
-```bash
-scripts/push_micro.py --clean
+python -m pip install ".[dev]"
+python -m build
 ```
 
 ## Hardware
@@ -278,14 +160,13 @@ scripts/push_micro.py --clean
 
 The top and bottom housing files are available on [makerworld](https://makerworld.com/en/models/2747607-bambutton-on-machine-bambuddy-plate-tracking).
 
-
 These parts are designed to fit the hardware listed above.
 
 You can print the housing in any colour or material you like. I found it useful to apply a small piece of double-sided tape to the ESP32-C3 board to hold it in place during assembly.
 
 The small alignment holes are designed to accept short pieces of 1.75 mm filament (6 mm should do it!), which can be used as simple dowel pins to align the top and bottom halves.
 
-The housing can be secured with 4 × M3 × 12 cap head bolts. These may not be required if the filament dowels are a tight enough fit.
+The housing can be secured with 4 × M3×12 cap head bolts. These may not be required if the filament dowels are a tight enough fit.
 
 I have also included a printed tool for doing up the M16 nut on the button as otherwise it is a bit difficult!
 
