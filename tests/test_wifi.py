@@ -222,7 +222,30 @@ def test_connect_with_fallback_starts_setup_access_point_after_timeout(monkeypat
     assert wifi.ifconfig()[0] == "192.168.4.1"
     assert ("active", False) in events
     assert ("config", {
-        "essid": "Bambutton-Setup",
+        "essid": "bambutton",
         "password": "bambutton",
     }) in events
     assert wifi.ensure_connected() is access_point
+
+
+def test_setup_access_point_uses_configured_hostname(monkeypatch):
+    events = []
+    wifi_module = load_wifi_module(
+        monkeypatch,
+        events,
+        connect_results=[False],
+        tick_increment_ms=10_001,
+    )
+    wifi = wifi_module.WiFi(
+        "ssid",
+        "password",
+        hostname="bambutton-ABCD",
+        timeout_seconds=10,
+    )
+
+    wifi.connect_with_fallback()
+
+    assert ("config", {
+        "essid": "bambutton-ABCD",
+        "password": "bambutton",
+    }) in events

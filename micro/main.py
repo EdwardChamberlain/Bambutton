@@ -71,7 +71,6 @@ network = wifi.WiFi(
     ssid=config["wifi"]["ssid"],
     password=config["wifi"]["password"],
     hostname=config["wifi"].get("hostname", wifi.DEFAULT_HOSTNAME),
-    ap_ssid=config["wifi"].get("ap_ssid", wifi.DEFAULT_AP_SSID),
     ap_password=config["wifi"].get("ap_password", wifi.DEFAULT_AP_PASSWORD),
     status_led=None,
     timeout_seconds=config["wifi"]["timeout_seconds"],

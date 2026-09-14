@@ -4,7 +4,6 @@ import time
 
 DEFAULT_HOSTNAME = "bambutton"
 RETRY_DELAY_SECONDS = 10
-DEFAULT_AP_SSID = "Bambutton-Setup"
 DEFAULT_AP_PASSWORD = "bambutton"
 STA_IF = getattr(network, "STA_IF", getattr(network.WLAN, "IF_STA", 0))
 AP_IF = getattr(network, "AP_IF", getattr(network.WLAN, "IF_AP", 1))
@@ -24,7 +23,6 @@ class WiFi:
         connected_led_value=0,
         failed_led_value=1,
         hostname=DEFAULT_HOSTNAME,
-        ap_ssid=DEFAULT_AP_SSID,
         ap_password=DEFAULT_AP_PASSWORD,
     ):
         self.ssid = ssid
@@ -34,7 +32,6 @@ class WiFi:
         self.connected_led_value = connected_led_value
         self.failed_led_value = failed_led_value
         self.hostname = hostname or DEFAULT_HOSTNAME
-        self.ap_ssid = ap_ssid or DEFAULT_AP_SSID
         self.ap_password = ap_password or DEFAULT_AP_PASSWORD
         self.wlan = network.WLAN(STA_IF)
         self.ap = None
@@ -108,9 +105,9 @@ class WiFi:
         self.wlan.active(False)
         self.ap = network.WLAN(AP_IF)
         self.ap.active(True)
-        self.ap.config(essid=self.ap_ssid, password=self.ap_password)
+        self.ap.config(essid=self.hostname, password=self.ap_password)
         self._set_led(self.failed_led_value)
-        print("Wi-Fi setup access point:", self.ap_ssid)
+        print("Wi-Fi setup access point:", self.hostname)
         print("Access point config:", self.ap.ifconfig())
         return self.ap
 
