@@ -1,12 +1,11 @@
 # Bambutton
+A physical plate-clear button for Bambuddy
 
 ![Bambutton in use on a P1S](assets/inuse.png)
 
-A physical plate-clear button for Bambuddy.
+Bambutton turns a small ESP32-C3 board into a dedicated wireless control for your printer. The LED ring flashes to show when a plate needs clearing, and one button press marks the plate as clear in Bambuddy so the next queued job can be despatched automatically.
 
-Bambutton turns a small ESP32-C3 board into a dedicated wireless control for your printer. The LED ring shows when a plate needs clearing, and one button press marks the plate as clear in Bambuddy so the next queued job can be despatched automatically.
-
-It gives each printer a simple shop-floor control that is quick to see, quick to press, and easier than opening the Bambuddy interface every time.
+It gives each printer a simple shop-floor control that is easy to see, quick to press, and smoother than opening the Bambuddy interface every time.
 
 ## Contents
 
@@ -28,9 +27,7 @@ and run the Bambutton setup assistant. It detects the connected ESP32-C3 automat
 MicroPython firmware and application files, and offers two setup modes:
 
 - **Web GUI setup** flashes the board without a saved configuration. Configure
-  it from the board's web page after flashing. A fresh setup gets a unique
-  hostname such as `bambutton-ABCD`, which is also used by its setup access
-  point.
+  it from the board's web page after flashing.
 - **Config-based setup** flashes an existing `config.json`. The assistant can
   save an example configuration for you to edit first.
 
@@ -125,18 +122,14 @@ detection is unavailable.
 ## Web GUI
 
 After flashing with Web GUI setup, the board starts a setup access point when it
-cannot connect to configured Wi-Fi. Connect to the board's hostname (for
-example, `bambutton-ABCD`) with password `bambutton`, then open
+cannot connect to configured Wi-Fi. Connect to the board's wifi (for
+example, `bambutton-ABCD`) with and use username `admin`, password `bambutton`, then open
 `http://192.168.4.1/`. Enter the Wi-Fi, Bambuddy API,
 printer, and pin settings and choose **Save and restart**.
 
 Once connected to Wi-Fi, open the board's hostname or assigned IP address. The
-page can load printers from Bambuddy and update the board without USB. All
-routes, including the setup access point, require HTTP Basic authentication
-with username `admin` and the password in `web.password`. The default password
-is `bambutton`; change it before relying on the web UI. The debug page reports
-runtime state without exposing secrets. The setup SSID always follows
-`wifi.hostname`; its password can be changed in `wifi.ap_password`.
+page can load printers from Bambuddy and update the board without USB. The debug page reports
+runtime state without exposing secrets.
 
 ## Release Packaging
 
@@ -167,14 +160,13 @@ python -m build
 
 The top and bottom housing files are available on [makerworld](https://makerworld.com/en/models/2747607-bambutton-on-machine-bambuddy-plate-tracking).
 
-
 These parts are designed to fit the hardware listed above.
 
 You can print the housing in any colour or material you like. I found it useful to apply a small piece of double-sided tape to the ESP32-C3 board to hold it in place during assembly.
 
 The small alignment holes are designed to accept short pieces of 1.75 mm filament (6 mm should do it!), which can be used as simple dowel pins to align the top and bottom halves.
 
-The housing can be secured with 4 × M3 × 12 cap head bolts. These may not be required if the filament dowels are a tight enough fit.
+The housing can be secured with 4 × M3×12 cap head bolts. These may not be required if the filament dowels are a tight enough fit.
 
 I have also included a printed tool for doing up the M16 nut on the button as otherwise it is a bit difficult!
 
