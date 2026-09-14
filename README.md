@@ -70,8 +70,11 @@ Key files:
 - `src/bambutton/gui.py` - GUI for selecting a setup mode and configuration file.
 - `src/bambutton_config_gui.py` - compatibility launcher for running the GUI from source.
 
-The firmware sets the board's network hostname to `bambutton` before connecting to Wi-Fi,
-so DHCP and mDNS-capable networks can identify it more easily.
+Web GUI setup generates a pseudo-random hostname such as `bambutton-ABCD` when
+the board boots without a saved configuration. The same hostname is used for
+the fallback setup access point, so multiple freshly flashed boards can be
+identified separately. Config based setup respects the hostname in the supplied
+configuration file.
 
 Wi-Fi connection timeouts apply to individual connection attempts. If the board
 cannot connect within the configured timeout, it starts the password-protected
@@ -81,8 +84,8 @@ network.
 
 ## Web Configuration
 
-After the board joins its configured Wi-Fi network, open `http://bambutton/` or
-the board's assigned IP address in a browser. The built-in configuration page
+After the board joins its configured Wi-Fi network, open the board's hostname or
+assigned IP address in a browser. The built-in configuration page
 can update the hostname, Wi-Fi credentials, Bambuddy API details, printer, and
 GPIO pins without a USB connection. Use **Load printers from Bambuddy** to
 populate the printer selector from the configured API.
@@ -96,11 +99,11 @@ require HTTP Basic authentication using username `admin` and the password in
 `bambutton`; change the password from the configuration page or in
 `config.json` before relying on the web UI. If the board cannot connect to its
 configured Wi-Fi within the connection timeout, it starts a password-protected
-setup access point named `Bambutton-Setup` with password `bambutton`. Connect
+setup access point named after its hostname with password `bambutton`. Connect
 to that network and open `http://192.168.4.1/` to correct the Wi-Fi settings.
 Saving settings restarts the board so it can retry the configured network. The
-setup network's SSID and password can be changed in `wifi.ap_ssid` and
-`wifi.ap_password` before flashing the configuration.
+setup network's SSID always follows `wifi.hostname`; its password can be
+changed in `wifi.ap_password` before flashing the configuration.
 
 ## Setup Assistant GUI
 
@@ -160,8 +163,8 @@ Manual users can edit `micro/config.json` before copying the files to the board:
   "wifi": {
     "ssid": "your-wifi-ssid",
     "password": "your-wifi-password",
+    "hostname": "bambutton",
     "timeout_seconds": 10,
-    "ap_ssid": "Bambutton-Setup",
     "ap_password": "bambutton"
   },
   "api": {

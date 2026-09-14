@@ -3,14 +3,31 @@ try:
 except ImportError:
     import json
 
+import random
+
+
+HOSTNAME_PREFIX = "bambutton"
+HOSTNAME_SUFFIX_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+HOSTNAME_SUFFIX_LENGTH = 4
+
+
+def generate_hostname():
+    suffix = "".join(
+        HOSTNAME_SUFFIX_ALPHABET[random.getrandbits(32) % len(HOSTNAME_SUFFIX_ALPHABET)]
+        for _ in range(HOSTNAME_SUFFIX_LENGTH)
+    )
+    return "{}-{}".format(HOSTNAME_PREFIX, suffix)
+
+
+DEFAULT_HOSTNAME = generate_hostname()
+
 
 DEFAULT_CONFIG = {
     "wifi": {
         "ssid": "",
         "password": "",
-        "hostname": "bambutton",
+        "hostname": DEFAULT_HOSTNAME,
         "timeout_seconds": 10,
-        "ap_ssid": "Bambutton-Setup",
         "ap_password": "bambutton",
     },
     "api": {

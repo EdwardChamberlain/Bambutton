@@ -4,7 +4,6 @@
     "password": "YOUR WIFI PASSWORD",
     "hostname": "bambutton",
     "timeout_seconds": 10,
-    "ap_ssid": "Bambutton-Setup",
     "ap_password": "bambutton"
   },
   "api": {
