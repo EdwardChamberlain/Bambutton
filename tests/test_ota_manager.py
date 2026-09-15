@@ -92,6 +92,26 @@ def test_unconfirmed_candidate_rolls_back_before_launch(tmp_path):
     assert manager.status()["last_error"]["candidate"] == "app_a"
 
 
+def test_candidate_import_error_rolls_back_immediately(tmp_path, monkeypatch):
+    resets = []
+    manager = ota_manager.OTAUpdateManager(
+        root=str(tmp_path),
+        reset=lambda: resets.append(True),
+    )
+    manager.stage_bundle(bundle(files={
+        "app_main.py": b"raise RuntimeError('broken candidate')\n",
+        "web_config.py": b"WEB = True\n",
+    }))
+    manager.commit_staged()
+    monkeypatch.delitem(__import__("sys").modules, "app_main", raising=False)
+
+    with pytest.raises(ota_manager.OTAError, match="rollback"):
+        manager.launch()
+
+    assert resets == [True]
+    assert manager.status()["active_slot"] is None
+
+
 def test_failed_replacement_does_not_modify_active_slot(tmp_path):
     manager = ota_manager.OTAUpdateManager(root=str(tmp_path))
     manager.stage_bundle(bundle("1.0.0"))
