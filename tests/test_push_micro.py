@@ -69,3 +69,25 @@ def test_bootstrap_commit_preserves_legacy_main_until_boot_hook_is_ready(tmp_pat
     assert legacy_main.read_text() == "legacy application"
     assert (tmp_path / "boot.py").read_text() == "boot.py"
     assert (tmp_path / "ota_manager.py").read_text() == "ota_manager.py"
+
+
+def test_bootstrap_commit_recovers_after_manager_was_installed_first(tmp_path, monkeypatch):
+    bootstrap = tmp_path / ".bambutton/bootstrap"
+    bootstrap.mkdir(parents=True)
+    for filename in ("app_main.py", "boot.py", "ota_manager.py", "web_config.py"):
+        (bootstrap / filename).write_text("new " + filename)
+    (tmp_path / "main.py").write_text("legacy application")
+    (tmp_path / "ota_manager.py").write_text("partial manager")
+    (tmp_path / ".bambutton/bootstrap-install.marker").write_text(
+        "bambutton-bootstrap-v1\n"
+    )
+
+    monkeypatch.chdir(tmp_path)
+    exec(push_micro.BOOTSTRAP_COMMIT_CODE, {})
+
+    assert (tmp_path / "ota_manager.py").read_text() == "new ota_manager.py"
+    assert (tmp_path / "boot.py").read_text() == "new boot.py"
+    assert (tmp_path / "main.py").read_text() == "legacy application"
+    assert (tmp_path / ".bambutton/bootstrap-install.marker").read_text() == (
+        "bambutton-bootstrap-v1\n"
+    )
