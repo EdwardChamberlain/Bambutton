@@ -83,11 +83,20 @@ def test_bootstrap_commit_recovers_after_manager_was_installed_first(tmp_path, m
     )
 
     monkeypatch.chdir(tmp_path)
-    exec(push_micro.BOOTSTRAP_COMMIT_CODE, {})
+    marker_writes = []
+    real_open = open
+
+    def tracked_open(path, mode="r", *args, **kwargs):
+        if path == ".bambutton/bootstrap-install.marker" and "w" in mode:
+            marker_writes.append(path)
+        return real_open(path, mode, *args, **kwargs)
+
+    exec(push_micro.BOOTSTRAP_COMMIT_CODE, {"open": tracked_open})
 
     assert (tmp_path / "ota_manager.py").read_text() == "new ota_manager.py"
     assert (tmp_path / "boot.py").read_text() == "new boot.py"
     assert (tmp_path / "main.py").read_text() == "legacy application"
+    assert marker_writes == []
     assert (tmp_path / ".bambutton/bootstrap-install.marker").read_text() == (
         "bambutton-bootstrap-v1\n"
     )

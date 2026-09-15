@@ -126,10 +126,11 @@ if (exists("boot.py") or exists("ota_manager.py")) and not has_ota_state and not
         "Unknown existing boot files; use a clean USB installation for recovery"
     )
 
-# Record the ownership of this staged installation before touching root files.
-# If power fails after this point, a retry can distinguish our incomplete
-# installation from an unrelated boot file.
-write_install_marker()
+# Record the ownership of a new staged installation before touching root
+# files. Preserve an existing valid marker so a power loss during a retry
+# cannot destroy the recovery evidence.
+if not recoverable_install:
+    write_install_marker()
 
 # If the previous attempt installed only the manager, it is not executable
 # without boot.py. Replace that incomplete copy before retrying the handoff.
