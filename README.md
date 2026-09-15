@@ -139,14 +139,16 @@ runtime state without exposing secrets.
 The web page's application update section can check the latest official release
 or stage a local `bambutton-ota.json` bundle. Updates are written to the
 inactive application slot, verified using file sizes and SHA-256 hashes, and
-activated by an atomic slot-pointer rename. The previous slot is retained until
+activated by a crash-safe append-only slot pointer. The previous slot is retained until
 the new application confirms a healthy boot, so interrupted transfers and failed
 restarts roll back automatically. Wi-Fi, API, printer, and web settings remain
 in `config.json` and are never part of an application update.
 
 The first OTA-capable installation must be flashed over USB so the stable
-bootloader and migration code are installed. Full MicroPython firmware updates
-still require USB flashing.
+bootloader and migration code are installed. The USB helper stages the complete
+runtime before installing the boot hook, preserves an existing legacy
+`main.py`, and migrates the application into slot A on the next boot. Full
+MicroPython firmware updates still require USB flashing.
 
 ## Release Packaging
 

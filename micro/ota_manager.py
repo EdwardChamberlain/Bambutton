@@ -1,9 +1,11 @@
 """Crash-safe application updates for the Bambutton MicroPython runtime.
 
 The updater deliberately keeps the boot loader and this module outside the
-application slots.  A release is written to the inactive slot, verified, and
-made active by renaming a small pointer file.  A reset before the application
-confirms its boot therefore rolls back to the previous slot.
+application slots. A release is written to the inactive slot, verified, and
+made active by appending a new pointer record. Pointer records are never
+overwritten: a partial new record is ignored and the previous valid record
+remains authoritative. A reset before the application confirms its boot
+therefore rolls back to the previous slot.
 """
 
 try:
@@ -48,9 +50,13 @@ APP_FILES = (
 )
 REQUIRED_APP_FILES = ("app_main.py", "web_config.py")
 UPDATE_ROOT = ".bambutton"
+BOOTSTRAP_ROOT = UPDATE_ROOT + "/bootstrap"
 ACTIVE_POINTER = UPDATE_ROOT + "/active.json"
 PENDING_POINTER = UPDATE_ROOT + "/pending.json"
 LAST_ERROR = UPDATE_ROOT + "/last_error.json"
+ACTIVE_RECORDS = "active"
+TRANSACTION_RECORDS = "transaction"
+ERROR_RECORDS = "error"
 SLOT_NAMES = ("app_a", "app_b")
 REMOTE_BUNDLE_URL = (
     "https://github.com/EdwardChamberlain/Bambutton/releases/latest/"
@@ -77,9 +83,9 @@ class OTAUpdateManager:
         self.staged_slot = None
 
     def status(self):
-        active = self._read_json(ACTIVE_POINTER)
-        pending = self._read_json(PENDING_POINTER)
-        error = self._read_json(LAST_ERROR)
+        active = self._read_active()
+        pending = self._read_pending()
+        error = self._read_last_error()
         slots = {}
         for slot in SLOT_NAMES:
             manifest = self._read_json(self._slot_path(slot, "manifest.json"))
@@ -97,7 +103,7 @@ class OTAUpdateManager:
             "bootloader_version": BOOTLOADER_VERSION,
             "current_version": current_version,
             "active_slot": active_slot,
-            "legacy": active is None,
+            "legacy": active is None or active.get("slot") not in SLOT_NAMES,
             "pending": pending,
             "staged_slot": self.staged_slot,
             "slots": slots,
@@ -105,64 +111,73 @@ class OTAUpdateManager:
         }
 
     def check_remote(self, url=REMOTE_BUNDLE_URL):
-        if not url.startswith("https://"):
-            raise OTAError("Remote update URLs must use HTTPS")
-        response = self.request_get(url)
         try:
-            status_code = getattr(response, "status_code", 200)
-            if status_code < 200 or status_code >= 300:
-                raise OTAError("Remote update returned HTTP {}".format(status_code))
-            body = response.text
-        finally:
-            close = getattr(response, "close", None)
-            if close:
-                close()
-        bundle = _parse_json_body(body)
-        self.stage_bundle(bundle)
-        return self.status()
-
-    def stage_bundle(self, bundle):
-        normalized = validate_bundle(bundle)
-        self._ensure_directory(UPDATE_ROOT)
-
-        active = self._read_json(ACTIVE_POINTER)
-        active_slot = active.get("slot") if active else None
-        target = _other_slot(active_slot)
-        temporary = self._slot_path(target + ".tmp")
-
-        self._remove_tree(temporary)
-        self._ensure_directory(temporary)
-        try:
-            for filename, file_info in normalized["files"].items():
-                path = self._safe_join(temporary, filename)
-                self._write_base64_file(path, file_info["content"])
-                self._verify_file(path, file_info)
-
-            self._write_json(self._slot_path(target + ".tmp", "manifest.json"), {
-                "format": normalized["format"],
-                "version": normalized["version"],
-                "release_notes": normalized.get("release_notes", ""),
-                "minimum_bootloader": normalized["minimum_bootloader"],
-                "files": {
-                    name: {
-                        "size": info["size"],
-                        "sha256": info["sha256"],
-                    }
-                    for name, info in normalized["files"].items()
-                },
-            })
-            self._remove_tree(self._slot_path(target))
-            self._rename(temporary, self._slot_path(target))
-        except Exception:
-            self._remove_tree(temporary)
+            if not url.startswith("https://"):
+                raise OTAError("Remote update URLs must use HTTPS")
+            response = self.request_get(url)
+            try:
+                status_code = getattr(response, "status_code", 200)
+                if status_code < 200 or status_code >= 300:
+                    raise OTAError("Remote update returned HTTP {}".format(status_code))
+                body = response.text
+            finally:
+                close = getattr(response, "close", None)
+                if close:
+                    close()
+            bundle = _parse_json_body(body)
+            self.stage_bundle(bundle)
+            return self.status()
+        except Exception as exc:
+            self._record_error(str(exc))
             raise
 
-        self.staged_slot = target
-        self._clear_file(LAST_ERROR)
-        return self.status()
+    def stage_bundle(self, bundle):
+        try:
+            normalized = validate_bundle(bundle)
+            self._ensure_directory(UPDATE_ROOT)
 
-    def migrate_legacy(self):
+            active = self._read_active()
+            active_slot = active.get("slot") if active else None
+            target = _other_slot(active_slot)
+            temporary = self._slot_path(target + ".tmp")
+
+            self._remove_tree(temporary)
+            self._ensure_directory(temporary)
+            try:
+                for filename, file_info in normalized["files"].items():
+                    path = self._safe_join(temporary, filename)
+                    self._write_base64_file(path, file_info["content"])
+                    self._verify_file(path, file_info)
+
+                self._write_json(self._slot_path(target + ".tmp", "manifest.json"), {
+                    "format": normalized["format"],
+                    "version": normalized["version"],
+                    "release_notes": normalized.get("release_notes", ""),
+                    "minimum_bootloader": normalized["minimum_bootloader"],
+                    "files": {
+                        name: {
+                            "size": info["size"],
+                            "sha256": info["sha256"],
+                        }
+                        for name, info in normalized["files"].items()
+                    },
+                })
+                self._remove_tree(self._slot_path(target))
+                self._rename(temporary, self._slot_path(target))
+            except Exception:
+                self._remove_tree(temporary)
+                raise
+
+            self.staged_slot = target
+            self._clear_error()
+            return self.status()
+        except Exception as exc:
+            self._record_error(str(exc))
+            raise
+
+    def migrate_legacy(self, source_root=None):
         """Move a flat-root application into slot A without touching it."""
+        source_root = source_root or self.root
         self._ensure_directory(UPDATE_ROOT)
         temporary = self._slot_path("app_a.tmp")
         self._remove_tree(temporary)
@@ -170,7 +185,7 @@ class OTAUpdateManager:
         manifest_files = {}
         try:
             for filename in APP_FILES:
-                source_path = self._full_path(filename)
+                source_path = source_root + "/" + filename
                 try:
                     with open(source_path, "rb") as source:
                         content = source.read()
@@ -179,6 +194,10 @@ class OTAUpdateManager:
                 destination = self._safe_join(temporary, filename)
                 with open(destination, "wb") as output:
                     output.write(content)
+                self._verify_file(destination, {
+                    "size": len(content),
+                    "sha256": _sha256_hex(content),
+                })
                 manifest_files[filename] = {
                     "size": len(content),
                     "sha256": _sha256_hex(content),
@@ -187,6 +206,9 @@ class OTAUpdateManager:
             for required in REQUIRED_APP_FILES:
                 if required not in manifest_files:
                     self._remove_tree(temporary)
+                    self._record_error(
+                        "Legacy application is missing: {}".format(required)
+                    )
                     return False
 
             self._write_json(self._slot_path("app_a.tmp", "manifest.json"), {
@@ -198,95 +220,108 @@ class OTAUpdateManager:
             })
             self._remove_tree(self._slot_path("app_a"))
             self._rename(temporary, self._slot_path("app_a"))
-            self._write_json(PENDING_POINTER + ".tmp", {
-                "candidate": "app_a",
-                "previous": None,
-                "attempted": False,
-            })
-            self._rename(PENDING_POINTER + ".tmp", PENDING_POINTER)
-            self._write_json(ACTIVE_POINTER + ".tmp", {"slot": "app_a"})
-            self._rename(ACTIVE_POINTER + ".tmp", ACTIVE_POINTER)
+            self._write_active("app_a")
             return True
-        except Exception:
+        except Exception as exc:
             self._remove_tree(temporary)
+            self._record_error(str(exc))
             raise
 
     def commit_staged(self):
-        if self.staged_slot not in SLOT_NAMES:
-            raise OTAError("No verified application is staged")
+        try:
+            if self.staged_slot not in SLOT_NAMES:
+                raise OTAError("No verified application is staged")
 
-        active = self._read_json(ACTIVE_POINTER)
-        previous = active.get("slot") if active else None
-        pending = {
-            "candidate": self.staged_slot,
-            "previous": previous,
-            "attempted": False,
-        }
-        self._write_json(PENDING_POINTER + ".tmp", pending)
-        self._rename(PENDING_POINTER + ".tmp", PENDING_POINTER)
-
-        self._write_json(ACTIVE_POINTER + ".tmp", {
-            "slot": self.staged_slot,
-        })
-        self._rename(ACTIVE_POINTER + ".tmp", ACTIVE_POINTER)
-        self.staged_slot = None
-        return self.status()
+            active = self._read_active()
+            previous = active.get("slot") if active else None
+            transaction = {
+                "state": "prepared",
+                "candidate": self.staged_slot,
+                "previous": previous,
+                "attempted": False,
+            }
+            self._write_transaction(transaction)
+            self._write_active(self.staged_slot)
+            self.staged_slot = None
+            self._clear_error()
+            return self.status()
+        except Exception as exc:
+            self._record_error(str(exc))
+            raise
 
     def confirm_boot(self):
-        pending = self._read_json(PENDING_POINTER)
+        pending = self._read_pending()
         if not pending:
             return False
 
-        active = self._read_json(ACTIVE_POINTER)
+        active = self._read_active()
         if not active or active.get("slot") != pending.get("candidate"):
             raise OTAError("Boot confirmation does not match active slot")
 
-        self._clear_file(PENDING_POINTER)
-        self._clear_file(LAST_ERROR)
+        pending = dict(pending)
+        pending["state"] = "confirmed"
+        pending["attempted"] = False
+        self._write_transaction(pending)
+        self._clear_error()
         return True
 
     def recover_pending_boot(self):
-        pending = self._read_json(PENDING_POINTER)
+        pending = self._read_pending()
         if not pending:
             return False
 
         previous = pending.get("previous")
         candidate = pending.get("candidate")
         if previous in SLOT_NAMES:
-            self._write_json(ACTIVE_POINTER + ".tmp", {"slot": previous})
-            self._rename(ACTIVE_POINTER + ".tmp", ACTIVE_POINTER)
+            self._write_active(previous)
         else:
-            self._clear_file(ACTIVE_POINTER)
+            self._write_active(None, legacy=True)
 
-        self._write_json(LAST_ERROR, {
+        self._write_transaction({
+            "state": "rolled_back",
             "message": "Application failed before confirming its boot",
             "candidate": candidate,
+            "previous": previous,
+            "attempted": True,
         })
-        self._clear_file(PENDING_POINTER)
+        self._record_error(
+            "Application failed before confirming its boot",
+            candidate=candidate,
+        )
         return True
 
     def launch(self):
         """Import the active application, rolling back failed candidates."""
-        active = self._read_json(ACTIVE_POINTER)
+        active = self._read_active()
         if not active:
-            self.migrate_legacy()
-            active = self._read_json(ACTIVE_POINTER)
+            bootstrap = self._full_path(BOOTSTRAP_ROOT)
+            if self._is_directory(bootstrap):
+                if self.migrate_legacy(source_root=bootstrap):
+                    self._remove_tree(bootstrap)
+            else:
+                self.migrate_legacy()
+            active = self._read_active()
         slot = active.get("slot") if active else None
 
-        pending = self._read_json(PENDING_POINTER)
+        pending = self._read_pending()
         if pending:
-            if slot != pending.get("candidate"):
-                # Power may have failed after pending.json was written but
+            state = pending.get("state", "prepared")
+            if state in ("confirmed", "rolled_back", "cleared"):
+                pending = None
+            elif slot != pending.get("candidate"):
+                # Power may have failed after the transaction record was written but
                 # before the active pointer was switched. The old app remains
                 # authoritative and the incomplete transaction is discarded.
-                self._clear_file(PENDING_POINTER)
+                pending = dict(pending)
+                pending["state"] = "rolled_back"
+                self._write_transaction(pending)
             elif pending.get("attempted"):
                 self.recover_pending_boot()
                 self._reset_after_recovery()
             else:
                 pending["attempted"] = True
-                self._write_json(PENDING_POINTER + ".tmp", pending)
-                self._rename(PENDING_POINTER + ".tmp", PENDING_POINTER)
+                pending["state"] = "attempted"
+                self._write_transaction(pending)
 
         if slot not in SLOT_NAMES:
             return self._launch_legacy()
@@ -299,7 +334,7 @@ class OTAUpdateManager:
         try:
             return __import__("app_main")
         except Exception:
-            pending = self._read_json(PENDING_POINTER)
+            pending = self._read_pending()
             if pending and pending.get("candidate") == slot:
                 self.recover_pending_boot()
                 self._reset_after_recovery()
@@ -355,6 +390,13 @@ class OTAUpdateManager:
             except OSError:
                 pass
 
+    def _is_directory(self, path):
+        try:
+            os.listdir(path)
+            return True
+        except OSError:
+            return False
+
     def _remove_tree(self, path):
         try:
             entries = os.listdir(path)
@@ -387,6 +429,128 @@ class OTAUpdateManager:
             os.rename(source, destination)
         except OSError as exc:
             raise OTAError("Could not atomically switch update state: {}".format(exc))
+
+    def _read_active(self):
+        record = self._read_latest_record(ACTIVE_RECORDS)
+        if record is not None:
+            return record
+
+        legacy = self._read_json(ACTIVE_POINTER)
+        if isinstance(legacy, dict) and legacy.get("slot") in SLOT_NAMES:
+            return legacy
+        return None
+
+    def _read_pending(self):
+        record = self._read_transaction()
+        if record is not None and record.get("state") in ("prepared", "attempted"):
+            return record
+        return None
+
+    def _read_transaction(self):
+        record = self._read_latest_record(TRANSACTION_RECORDS)
+        if record is not None:
+            return record
+
+        legacy = self._read_json(PENDING_POINTER)
+        if not isinstance(legacy, dict):
+            return None
+        legacy = dict(legacy)
+        legacy["state"] = "attempted" if legacy.get("attempted") else "prepared"
+        return legacy
+
+    def _read_last_error(self):
+        record = self._read_latest_record(ERROR_RECORDS)
+        if record is not None:
+            return None if record.get("cleared") else record
+        return self._read_json(LAST_ERROR)
+
+    def _write_active(self, slot, legacy=False):
+        value = {"slot": slot}
+        if legacy:
+            value["legacy"] = True
+        self._write_state_record(ACTIVE_RECORDS, value)
+
+    def _write_transaction(self, value):
+        self._write_state_record(TRANSACTION_RECORDS, value)
+
+    def _record_error(self, message, candidate=None):
+        value = {"message": message}
+        if candidate is not None:
+            value["candidate"] = candidate
+        try:
+            self._write_state_record(ERROR_RECORDS, value)
+        except Exception:
+            pass
+
+    def _clear_error(self):
+        try:
+            self._write_state_record(ERROR_RECORDS, {"cleared": True})
+        except Exception:
+            self._clear_file(LAST_ERROR)
+
+    def _write_state_record(self, kind, value):
+        self._ensure_directory(UPDATE_ROOT)
+        sequence = self._next_sequence()
+        path = self._full_path(
+            UPDATE_ROOT + "/" + kind + "." + str(sequence) + ".json"
+        )
+        with open(path, "w") as output:
+            output.write(_json_dumps(value))
+            output.write("\n")
+
+    def _read_latest_record(self, kind):
+        records = []
+        prefix = kind + "."
+        try:
+            names = os.listdir(self._full_path(UPDATE_ROOT))
+        except OSError:
+            return None
+        for name in names:
+            if not name.startswith(prefix) or not name.endswith(".json"):
+                continue
+            sequence_text = name[len(prefix):-5]
+            try:
+                sequence = int(sequence_text)
+            except (TypeError, ValueError):
+                continue
+            records.append((sequence, name))
+
+        records.sort(reverse=True)
+        for _sequence, name in records:
+            value = self._read_json(UPDATE_ROOT + "/" + name)
+            if not isinstance(value, dict):
+                continue
+            if kind == ACTIVE_RECORDS:
+                slot = value.get("slot")
+                if slot not in SLOT_NAMES and not (
+                    slot is None and value.get("legacy")
+                ):
+                    continue
+            elif kind == TRANSACTION_RECORDS:
+                if value.get("state") not in (
+                    "prepared", "attempted", "confirmed", "rolled_back", "cleared"
+                ):
+                    continue
+            return value
+        return None
+
+    def _next_sequence(self):
+        highest = 0
+        try:
+            names = os.listdir(self._full_path(UPDATE_ROOT))
+        except OSError:
+            names = []
+        for name in names:
+            parts = name.split(".")
+            if len(parts) != 3 or parts[0] not in (
+                ACTIVE_RECORDS, TRANSACTION_RECORDS, ERROR_RECORDS
+            ) or parts[2] != "json":
+                continue
+            try:
+                highest = max(highest, int(parts[1]))
+            except (TypeError, ValueError):
+                pass
+        return highest + 1
 
     def _read_json(self, path):
         path = self._full_path(path)
