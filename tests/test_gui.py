@@ -219,7 +219,10 @@ def test_handle_flash_shows_progress_before_flashing(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(gui.sg, "popup", lambda *args: None, raising=False)
 
-    gui.handle_flash(window, {"-WEB-": True})
+    gui.handle_flash(
+        window,
+        {"-WEB-": True, "-CONFIG-": False, "-RANDOMIZE_HOSTNAME-": True},
+    )
 
     assert events == [(firmware_path, None, False)]
     assert window.refresh_calls == 1
@@ -363,3 +366,26 @@ def test_flash_board_cleans_randomized_config_after_flashing(tmp_path, monkeypat
     assert flashed_config["contents"]["wifi"]["hostname"] == "shop-button-ABCD"
     assert not flashed_config["path"].exists()
     assert json.loads(config_path.read_text())["wifi"]["hostname"] == "shop-button"
+
+
+def test_create_randomized_config_accepts_maximum_valid_hostname(tmp_path, monkeypatch):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps({"wifi": {"hostname": "a" * 58}}))
+    monkeypatch.setattr(gui, "random_hostname_suffix", lambda: "ABCD")
+
+    randomized_path = gui.create_randomized_config(config_path)
+
+    try:
+        randomized_config = json.loads(randomized_path.read_text())
+        assert len(randomized_config["wifi"]["hostname"]) == 63
+    finally:
+        randomized_path.unlink(missing_ok=True)
+
+
+def test_create_randomized_config_rejects_hostname_that_would_exceed_limit(tmp_path, monkeypatch):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps({"wifi": {"hostname": "a" * 59}}))
+    monkeypatch.setattr(gui, "random_hostname_suffix", lambda: "ABCD")
+
+    with pytest.raises(ValueError, match="58 characters or fewer"):
+        gui.create_randomized_config(config_path)

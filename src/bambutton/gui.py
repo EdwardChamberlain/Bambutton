@@ -28,6 +28,7 @@ DEFAULT_FIRMWARE_DIR = RESOURCE_ROOT / "firmware"
 FIRMWARE_RESTART_DELAY_SECONDS = 2
 HOSTNAME_SUFFIX_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 HOSTNAME_SUFFIX_LENGTH = 4
+MAX_HOSTNAME_LENGTH = 63
 
 CLEAN_BOARD_CODE = """
 import os
@@ -312,7 +313,10 @@ def handle_flash(window, values):
         flash_board(
             firmware_path,
             config_path,
-            randomize_hostname=values.get("-RANDOMIZE_HOSTNAME-", False),
+            randomize_hostname=(
+                values.get("-CONFIG-", False)
+                and values.get("-RANDOMIZE_HOSTNAME-", False)
+            ),
         )
     except Exception as exc:
         window["-STATUS-"].update(value="Flash failed; see the error dialog.")
@@ -422,7 +426,7 @@ def create_randomized_config(config_path):
     if not isinstance(hostname, str) or not hostname:
         raise ValueError("Configuration file must contain a Wi-Fi hostname to randomize.")
 
-    wifi_config["hostname"] = "{}-{}".format(hostname, random_hostname_suffix())
+    wifi_config["hostname"] = randomized_hostname(hostname)
 
     temporary_file = tempfile.NamedTemporaryFile(
         mode="w",
@@ -441,6 +445,18 @@ def create_randomized_config(config_path):
         raise
     temporary_file.close()
     return temporary_path
+
+
+def randomized_hostname(hostname):
+    result = "{}-{}".format(hostname, random_hostname_suffix())
+    if len(result) > MAX_HOSTNAME_LENGTH:
+        max_source_length = MAX_HOSTNAME_LENGTH - HOSTNAME_SUFFIX_LENGTH - 1
+        raise ValueError(
+            "Hostname must be {} characters or fewer when randomization is enabled.".format(
+                max_source_length
+            )
+        )
+    return result
 
 
 def random_hostname_suffix():
