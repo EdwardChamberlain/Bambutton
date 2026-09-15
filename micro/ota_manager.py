@@ -296,7 +296,14 @@ class OTAUpdateManager:
             raise OTAError("Active application slot is incomplete")
         if slot_path not in sys.path:
             sys.path.insert(0, slot_path)
-        return __import__("app_main")
+        try:
+            return __import__("app_main")
+        except Exception:
+            pending = self._read_json(PENDING_POINTER)
+            if pending and pending.get("candidate") == slot:
+                self.recover_pending_boot()
+                self._reset_after_recovery()
+            raise
 
     def _launch_legacy(self):
         return __import__("app_main")
