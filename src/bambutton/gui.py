@@ -92,6 +92,19 @@ def exists(path):
         return False
 
 
+def is_recoverable_install():
+    try:
+        with open(".bambutton/bootstrap-install.marker") as marker:
+            return marker.read() == "bambutton-bootstrap-v1\\n"
+    except OSError:
+        return False
+
+
+def write_install_marker():
+    with open(".bambutton/bootstrap-install.marker", "w") as marker:
+        marker.write("bambutton-bootstrap-v1\\n")
+
+
 required = (
     ".bambutton/bootstrap/app_main.py",
     ".bambutton/bootstrap/ota_manager.py",
@@ -107,10 +120,21 @@ has_ota_state = any(
     name == "active.json" or name.startswith("active.")
     for name in state_names
 )
-if (exists("boot.py") or exists("ota_manager.py")) and not has_ota_state:
+recoverable_install = is_recoverable_install()
+if (exists("boot.py") or exists("ota_manager.py")) and not has_ota_state and not recoverable_install:
     raise RuntimeError(
         "Unknown existing boot files; use a clean USB installation for recovery"
     )
+
+# Record the ownership of this staged installation before touching root files.
+# If power fails after this point, a retry can distinguish our incomplete
+# installation from an unrelated boot file.
+write_install_marker()
+
+# If the previous attempt installed only the manager, it is not executable
+# without boot.py. Replace that incomplete copy before retrying the handoff.
+if exists("ota_manager.py") and not exists("boot.py") and not has_ota_state:
+    os.remove("ota_manager.py")
 
 # An existing main.py is the legacy application. Leave it untouched and let
 # boot.py run the migrated slot before MicroPython reaches main.py.

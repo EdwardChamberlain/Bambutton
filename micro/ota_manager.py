@@ -51,6 +51,7 @@ APP_FILES = (
 REQUIRED_APP_FILES = ("app_main.py", "web_config.py")
 UPDATE_ROOT = ".bambutton"
 BOOTSTRAP_ROOT = UPDATE_ROOT + "/bootstrap"
+BOOTSTRAP_INSTALL_MARKER = UPDATE_ROOT + "/bootstrap-install.marker"
 ACTIVE_POINTER = UPDATE_ROOT + "/active.json"
 PENDING_POINTER = UPDATE_ROOT + "/pending.json"
 LAST_ERROR = UPDATE_ROOT + "/last_error.json"
@@ -298,9 +299,12 @@ class OTAUpdateManager:
             if self._is_directory(bootstrap):
                 if self.migrate_legacy(source_root=bootstrap):
                     self._remove_tree(bootstrap)
+                    self._clear_file(BOOTSTRAP_INSTALL_MARKER)
             else:
                 self.migrate_legacy()
             active = self._read_active()
+        if active and active.get("slot") in SLOT_NAMES:
+            self._clear_file(BOOTSTRAP_INSTALL_MARKER)
         slot = active.get("slot") if active else None
 
         pending = self._read_pending()

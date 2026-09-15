@@ -146,6 +146,9 @@ def test_bootstrap_migration_uses_staged_files_and_cleans_up(tmp_path, monkeypat
         if filename == "app_main.py":
             content = b"BOOTSTRAPPED = True\n"
         (bootstrap / filename).write_bytes(content)
+    (tmp_path / ".bambutton/bootstrap-install.marker").write_text(
+        "bambutton-bootstrap-v1\n"
+    )
 
     monkeypatch.delitem(__import__("sys").modules, "app_main", raising=False)
     manager = ota_manager.OTAUpdateManager(root=str(tmp_path))
@@ -153,6 +156,7 @@ def test_bootstrap_migration_uses_staged_files_and_cleans_up(tmp_path, monkeypat
 
     assert manager.status()["active_slot"] == "app_a"
     assert not bootstrap.exists()
+    assert not (tmp_path / ".bambutton/bootstrap-install.marker").exists()
     assert (tmp_path / ".bambutton/app_a/app_main.py").read_bytes() == (
         b"BOOTSTRAPPED = True\n"
     )
