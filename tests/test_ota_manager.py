@@ -53,7 +53,7 @@ def test_legacy_migration_copies_root_files_before_switching_pointer(tmp_path):
 
     assert manager.migrate_legacy() is True
     assert manager.status()["active_slot"] == "app_a"
-    assert manager.status()["pending"] is None
+    assert manager.status()["pending"]["candidate"] == "app_a"
     for filename in ota_manager.APP_FILES:
         assert (tmp_path / ".bambutton/app_a" / filename).read_bytes() == (
             filename + "\n"
@@ -106,6 +106,38 @@ def test_candidate_import_error_rolls_back_immediately(tmp_path, monkeypatch):
 
     assert resets == [True]
     assert manager.status()["active_slot"] is None
+
+
+def test_bootstrap_candidate_failure_returns_to_legacy_main(tmp_path, monkeypatch):
+    bootstrap = tmp_path / ".bambutton/bootstrap"
+    bootstrap.mkdir(parents=True)
+    for filename in ota_manager.APP_FILES:
+        content = (filename + "\n").encode()
+        if filename == "app_main.py":
+            content = b"raise RuntimeError('broken bootstrap')\n"
+        (bootstrap / filename).write_bytes(content)
+    (bootstrap / "main.py").write_text("stable loader\n")
+    (tmp_path / "main.py").write_text("LEGACY_BOOTED = True\n")
+
+    resets = []
+    monkeypatch.delitem(__import__("sys").modules, "app_main", raising=False)
+    monkeypatch.syspath_prepend(str(tmp_path))
+    manager = ota_manager.OTAUpdateManager(
+        root=str(tmp_path),
+        reset=lambda: resets.append(True),
+    )
+
+    with pytest.raises(ota_manager.OTAError, match="rollback"):
+        manager.launch()
+
+    assert resets == [True]
+    assert manager.status()["active_slot"] is None
+    assert manager._read_active()["legacy_entry"] == "main"
+
+    monkeypatch.delitem(__import__("sys").modules, "main", raising=False)
+    manager.reset = None
+    manager._launch_legacy()
+    assert __import__("main").LEGACY_BOOTED is True
 
 
 def test_failed_replacement_does_not_modify_active_slot(tmp_path):

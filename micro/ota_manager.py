@@ -177,8 +177,9 @@ class OTAUpdateManager:
             raise
 
     def migrate_legacy(self, source_root=None):
-        """Move a flat-root application into slot A without touching it."""
+        """Stage a flat-root application as an unconfirmed slot-A candidate."""
         source_root = source_root or self.root
+        legacy_entry = self._legacy_entry_for_migration(source_root)
         self._ensure_directory(UPDATE_ROOT)
         temporary = self._slot_path("app_a.tmp")
         self._remove_tree(temporary)
@@ -221,6 +222,13 @@ class OTAUpdateManager:
             })
             self._remove_tree(self._slot_path("app_a"))
             self._rename(temporary, self._slot_path("app_a"))
+            self._write_transaction({
+                "state": "prepared",
+                "candidate": "app_a",
+                "previous": None,
+                "legacy_entry": legacy_entry,
+                "attempted": False,
+            })
             self._write_active("app_a")
             return True
         except Exception as exc:
@@ -276,7 +284,11 @@ class OTAUpdateManager:
         if previous in SLOT_NAMES:
             self._write_active(previous)
         else:
-            self._write_active(None, legacy=True)
+            self._write_active(
+                None,
+                legacy=True,
+                legacy_entry=pending.get("legacy_entry"),
+            )
 
         self._write_transaction({
             "state": "rolled_back",
@@ -345,12 +357,58 @@ class OTAUpdateManager:
             raise
 
     def _launch_legacy(self):
+        active = self._read_active()
+        if active and active.get("legacy_entry") == "main":
+            return __import__("main")
         return __import__("app_main")
 
     def _reset_after_recovery(self):
         if self.reset:
             self.reset()
         raise OTAError("Application rollback requested")
+
+    def _legacy_entry_for_migration(self, source_root):
+        if source_root == self.root:
+            if self._path_exists(self.root + "/app_main.py"):
+                return "app_main"
+            if self._path_exists(self.root + "/main.py"):
+                return "main"
+            return None
+
+        legacy_main = self.root + "/main.py"
+        staged_main = source_root + "/main.py"
+        if (
+            self._path_exists(legacy_main)
+            and self._path_exists(staged_main)
+            and not self._files_equal(legacy_main, staged_main)
+        ):
+            return "main"
+
+        legacy_app = self.root + "/app_main.py"
+        staged_app = source_root + "/app_main.py"
+        if (
+            self._path_exists(legacy_app)
+            and self._path_exists(staged_app)
+            and not self._files_equal(legacy_app, staged_app)
+        ):
+            return "app_main"
+        return None
+
+    def _path_exists(self, path):
+        try:
+            os.stat(path)
+            return True
+        except OSError:
+            return False
+
+    def _files_equal(self, path_a, path_b):
+        try:
+            with open(path_a, "rb") as first:
+                first_content = first.read()
+            with open(path_b, "rb") as second:
+                return first_content == second.read()
+        except OSError:
+            return False
 
     def _slot_path(self, slot, filename=None):
         path = self.root + "/" + UPDATE_ROOT + "/" + slot
@@ -468,10 +526,12 @@ class OTAUpdateManager:
             return None if record.get("cleared") else record
         return self._read_json(LAST_ERROR)
 
-    def _write_active(self, slot, legacy=False):
+    def _write_active(self, slot, legacy=False, legacy_entry=None):
         value = {"slot": slot}
         if legacy:
             value["legacy"] = True
+        if legacy_entry in ("main", "app_main"):
+            value["legacy_entry"] = legacy_entry
         self._write_state_record(ACTIVE_RECORDS, value)
 
     def _write_transaction(self, value):
