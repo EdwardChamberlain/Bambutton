@@ -42,10 +42,8 @@ def test_stage_and_commit_use_inactive_slot_and_preserve_config(tmp_path):
 
     manager.commit_staged()
 
-    assert json.loads((tmp_path / ".bambutton/active.json").read_text()) == {
-        "slot": "app_a"
-    }
-    assert json.loads((tmp_path / ".bambutton/pending.json").read_text())["candidate"] == "app_a"
+    assert manager.status()["active_slot"] == "app_a"
+    assert manager.status()["pending"]["candidate"] == "app_a"
 
 
 def test_legacy_migration_copies_root_files_before_switching_pointer(tmp_path):
@@ -54,10 +52,8 @@ def test_legacy_migration_copies_root_files_before_switching_pointer(tmp_path):
     manager = ota_manager.OTAUpdateManager(root=str(tmp_path))
 
     assert manager.migrate_legacy() is True
-    assert json.loads((tmp_path / ".bambutton/active.json").read_text()) == {
-        "slot": "app_a"
-    }
-    assert json.loads((tmp_path / ".bambutton/pending.json").read_text())["previous"] is None
+    assert manager.status()["active_slot"] == "app_a"
+    assert manager.status()["pending"] is None
     for filename in ota_manager.APP_FILES:
         assert (tmp_path / ".bambutton/app_a" / filename).read_bytes() == (
             filename + "\n"
@@ -88,7 +84,7 @@ def test_unconfirmed_candidate_rolls_back_before_launch(tmp_path):
         manager.launch()
 
     assert resets == [True]
-    assert not (tmp_path / ".bambutton/active.json").exists()
+    assert manager.status()["active_slot"] is None
     assert manager.status()["last_error"]["candidate"] == "app_a"
 
 
@@ -126,6 +122,40 @@ def test_failed_replacement_does_not_modify_active_slot(tmp_path):
 
     assert (tmp_path / ".bambutton/app_a/app_main.py").read_bytes() == active_content
     assert manager.status()["active_slot"] == "app_a"
+    assert "checksum" in manager.status()["last_error"]["message"]
+
+
+def test_pointer_records_ignore_an_interrupted_new_record(tmp_path):
+    manager = ota_manager.OTAUpdateManager(root=str(tmp_path))
+    manager.stage_bundle(bundle("1.0.0"))
+    manager.commit_staged()
+    manager.confirm_boot()
+
+    active_records = sorted((tmp_path / ".bambutton").glob("active.*.json"))
+    assert active_records
+    (tmp_path / ".bambutton/active.999999.json").write_text('{"slot":')
+
+    assert manager.status()["active_slot"] == "app_a"
+
+
+def test_bootstrap_migration_uses_staged_files_and_cleans_up(tmp_path, monkeypatch):
+    bootstrap = tmp_path / ".bambutton/bootstrap"
+    bootstrap.mkdir(parents=True)
+    for filename in ota_manager.APP_FILES:
+        content = (filename + "\n").encode()
+        if filename == "app_main.py":
+            content = b"BOOTSTRAPPED = True\n"
+        (bootstrap / filename).write_bytes(content)
+
+    monkeypatch.delitem(__import__("sys").modules, "app_main", raising=False)
+    manager = ota_manager.OTAUpdateManager(root=str(tmp_path))
+    manager.launch()
+
+    assert manager.status()["active_slot"] == "app_a"
+    assert not bootstrap.exists()
+    assert (tmp_path / ".bambutton/app_a/app_main.py").read_bytes() == (
+        b"BOOTSTRAPPED = True\n"
+    )
 
 
 @pytest.mark.parametrize(

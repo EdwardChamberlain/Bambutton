@@ -42,6 +42,7 @@ packages = ["src/bambutton"]
 "micro/api.py" = "bambutton/micro/api.py"
 "micro/app_main.py" = "bambutton/micro/app_main.py"
 "micro/bambuddy_api.py" = "bambutton/micro/bambuddy_api.py"
+"micro/boot.py" = "bambutton/micro/boot.py"
 "micro/config_loader.py" = "bambutton/micro/config_loader.py"
 "micro/gpio_button.py" = "bambutton/micro/gpio_button.py"
 "micro/led_flasher.py" = "bambutton/micro/led_flasher.py"
@@ -64,6 +65,7 @@ include = [
   "/micro/api.py",
   "/micro/app_main.py",
   "/micro/bambuddy_api.py",
+  "/micro/boot.py",
   "/micro/config_loader.py",
   "/micro/gpio_button.py",
   "/micro/led_flasher.py",

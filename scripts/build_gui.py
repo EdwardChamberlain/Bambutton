@@ -14,6 +14,7 @@ MICRO_FILES = [
     "api.py",
     "app_main.py",
     "bambuddy_api.py",
+    "boot.py",
     "config_loader.py",
     "gpio_button.py",
     "led_flasher.py",
