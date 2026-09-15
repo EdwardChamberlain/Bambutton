@@ -1,9 +1,10 @@
 import base64
+import hashlib
 import json
 
 import pytest
 
-from micro import web_config
+from micro import ota_manager, web_config
 
 
 def base_config():
@@ -276,3 +277,64 @@ def test_config_page_preserves_printer_selection_when_loading_printers():
     assert 'const currentPrinterId = String(printerSelect.value);' in page
     assert 'option.selected = String(printer.id) === currentPrinterId;' in page
     assert 'Current printer (" + currentPrinterId + ", not returned)' in page
+
+
+def update_bundle():
+    files = {}
+    for name, content in {
+        "app_main.py": b"print('updated')\n",
+        "web_config.py": b"WEB = True\n",
+    }.items():
+        files[name] = {
+            "size": len(content),
+            "sha256": hashlib.sha256(content).hexdigest(),
+            "content": base64.b64encode(content).decode("ascii"),
+        }
+    return {
+        "format": 1,
+        "version": "2.0.0",
+        "minimum_bootloader": 1,
+        "files": files,
+    }
+
+
+def test_config_page_contains_atomic_update_controls():
+    page = web_config.render_config_page(base_config(), update_status={})
+
+    assert 'id="check-update"' in page
+    assert 'id="upload-update"' in page
+    assert 'id="install-update"' in page
+    assert "inactive application slot" in page
+
+
+def test_update_routes_stage_and_commit_without_touching_config(tmp_path):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps(base_config()))
+    manager = ota_manager.OTAUpdateManager(root=str(tmp_path))
+    server = object.__new__(web_config.WebConfigServer)
+    server.config = base_config()
+    server.api = None
+    server.status_provider = lambda: {}
+    server.config_path = str(config_path)
+    server.update_manager = manager
+    server.restart_requested = False
+
+    status, content_type, body = server.handle_request(
+        "POST",
+        "/api/update/upload",
+        json.dumps(update_bundle()),
+        headers=auth_headers(),
+    )
+    assert status == 200
+    assert content_type == "application/json"
+    assert json.loads(body)["staged_slot"] == "app_a"
+
+    status, _, body = server.handle_request(
+        "POST",
+        "/api/update/install",
+        headers=auth_headers(),
+    )
+    assert status == 200
+    assert server.restart_requested is True
+    assert json.loads(body)["pending"]["candidate"] == "app_a"
+    assert json.loads(config_path.read_text()) == base_config()

@@ -40,11 +40,13 @@ packages = ["src/bambutton"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "micro/api.py" = "bambutton/micro/api.py"
+"micro/app_main.py" = "bambutton/micro/app_main.py"
 "micro/bambuddy_api.py" = "bambutton/micro/bambuddy_api.py"
 "micro/config_loader.py" = "bambutton/micro/config_loader.py"
 "micro/gpio_button.py" = "bambutton/micro/gpio_button.py"
 "micro/led_flasher.py" = "bambutton/micro/led_flasher.py"
 "micro/main.py" = "bambutton/micro/main.py"
+"micro/ota_manager.py" = "bambutton/micro/ota_manager.py"
 "micro/periodic_timer.py" = "bambutton/micro/periodic_timer.py"
 "micro/wifi.py" = "bambutton/micro/wifi.py"
 "micro/web_config.py" = "bambutton/micro/web_config.py"
@@ -60,11 +62,13 @@ include = [
   "/scripts",
   "/requirements.txt",
   "/micro/api.py",
+  "/micro/app_main.py",
   "/micro/bambuddy_api.py",
   "/micro/config_loader.py",
   "/micro/gpio_button.py",
   "/micro/led_flasher.py",
   "/micro/main.py",
+  "/micro/ota_manager.py",
   "/micro/periodic_timer.py",
   "/micro/wifi.py",
   "/micro/web_config.py",
