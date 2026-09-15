@@ -1,4 +1,4 @@
-"""Stable MicroPython entrypoint for the atomic application updater."""
+"""Stable boot hook used to migrate existing flat-root installations."""
 
 import machine
 import ota_manager

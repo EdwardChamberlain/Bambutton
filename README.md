@@ -131,6 +131,22 @@ Once connected to Wi-Fi, open the board's hostname or assigned IP address. The
 page can load printers from Bambuddy and update the board without USB. The debug page reports
 runtime state without exposing secrets.
 
+### Application updates
+
+The web page's application update section can check the latest official release
+or stage a local `bambutton-ota.json` bundle. Updates are written to the
+inactive application slot, verified using file sizes and SHA-256 hashes, and
+activated by a crash-safe append-only slot pointer. The previous slot is retained until
+the new application confirms a healthy boot, so interrupted transfers and failed
+restarts roll back automatically. Wi-Fi, API, printer, and web settings remain
+in `config.json` and are never part of an application update.
+
+The first OTA-capable installation must be flashed over USB so the stable
+bootloader and migration code are installed. The USB helper stages the complete
+runtime before installing the boot hook, preserves an existing legacy
+`main.py`, and migrates the application into slot A on the next boot. Full
+MicroPython firmware updates still require USB flashing.
+
 ## Release Packaging
 
 Package versions are derived from Git tags via `hatch-vcs`. A tag beginning with
@@ -141,12 +157,19 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-The workflow attaches Windows and macOS setup-tool archives, plus a Python
-wheel and source distribution. To build the Python distribution locally:
+The workflow attaches Windows and macOS setup-tool archives, the verified
+`bambutton-ota.json` application bundle, plus a Python wheel and source
+distribution. To build the Python distribution locally:
 
 ```bash
 python -m pip install ".[dev]"
 python -m build
+```
+
+Build an application bundle locally with:
+
+```bash
+python scripts/build_ota_bundle.py --version 0.2.0 --output dist/bambutton-ota.json
 ```
 
 ## Hardware

@@ -103,6 +103,31 @@ jobs:
           name: macos-app
           path: dist/Bambutton-macos.zip
 
+  ota-bundle:
+    name: Build MicroPython OTA bundle
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build OTA bundle
+        run: |
+          python scripts/build_ota_bundle.py \
+            --version "${GITHUB_REF_NAME#v}" \
+            --output dist/bambutton-ota.json
+
+      - name: Upload OTA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ota-bundle
+          path: dist/bambutton-ota.json
+
   release:
     name: Publish GitHub release
     runs-on: ubuntu-latest
@@ -110,6 +135,7 @@ jobs:
       - python-dist
       - windows-exe
       - macos-app
+      - ota-bundle
 
     steps:
       - name: Download artifacts

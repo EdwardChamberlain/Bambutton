@@ -12,11 +12,14 @@ FIRMWARE_DIR = PROJECT_ROOT / "firmware"
 PYINSTALLER_CONFIG_DIR = PROJECT_ROOT / ".pyinstaller-cache"
 MICRO_FILES = [
     "api.py",
+    "app_main.py",
     "bambuddy_api.py",
+    "boot.py",
     "config_loader.py",
     "gpio_button.py",
     "led_flasher.py",
     "main.py",
+    "ota_manager.py",
     "periodic_timer.py",
     "wifi.py",
     "web_config.py",
