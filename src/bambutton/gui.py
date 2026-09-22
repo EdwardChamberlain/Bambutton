@@ -2,7 +2,9 @@
 import contextlib
 import io
 import json
+import secrets
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -24,6 +26,9 @@ MICRO_DIR = RESOURCE_ROOT / "micro"
 CONFIG_EXAMPLE_PATH = MICRO_DIR / "config_example.json"
 DEFAULT_FIRMWARE_DIR = RESOURCE_ROOT / "firmware"
 FIRMWARE_RESTART_DELAY_SECONDS = 2
+HOSTNAME_SUFFIX_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+HOSTNAME_SUFFIX_LENGTH = 4
+MAX_HOSTNAME_LENGTH = 63
 
 CLEAN_BOARD_CODE = """
 import os
@@ -199,6 +204,15 @@ def build_window():
                 pad=(4, 0),
             ),
         ],
+        [
+            sg.Checkbox(
+                "Randomise hostname for each board",
+                key="-RANDOMIZE_HOSTNAME-",
+                text_color=text_color,
+                disabled=True,
+                tooltip="Append a fresh four-character suffix to the configured hostname.",
+            )
+        ],
         [sg.HorizontalSeparator(color=divider_color, pad=(0, (12, 10)))],
         [
             sg.Text(
@@ -296,7 +310,14 @@ def handle_flash(window, values):
     try:
         firmware_path = validate_firmware(first_firmware_file())
         config_path = config_path_for_mode(values)
-        flash_board(firmware_path, config_path)
+        flash_board(
+            firmware_path,
+            config_path,
+            randomize_hostname=(
+                values.get("-CONFIG-", False)
+                and values.get("-RANDOMIZE_HOSTNAME-", False)
+            ),
+        )
     except Exception as exc:
         window["-STATUS-"].update(value="Flash failed; see the error dialog.")
         sg.popup_error("Could not flash firmware", str(exc))
@@ -314,6 +335,7 @@ def update_action_states(window, values, update_status=True):
     window["-CONFIG_PATH-"].update(disabled=not config_mode)
     window["-CONFIG_BROWSE-"].update(disabled=not config_mode)
     window["-SAVE_EXAMPLE-"].update(disabled=not config_mode)
+    window["-RANDOMIZE_HOSTNAME-"].update(disabled=not config_mode)
 
     errors = collect_basic_errors(values)
     window["-FLASH-"].update(disabled=bool(errors))
@@ -370,14 +392,78 @@ def validate_config_file(path):
     return config_path
 
 
-def flash_board(firmware_path, config_path):
+def flash_board(firmware_path, config_path, randomize_hostname=False):
     firmware_path = validate_firmware(firmware_path)
     if config_path is not None:
         config_path = validate_config_file(config_path)
+    if randomize_hostname and config_path is None:
+        raise ValueError("Hostname randomization requires a config.json file.")
 
-    flash_firmware(firmware_path)
-    time.sleep(FIRMWARE_RESTART_DELAY_SECONDS)
-    push_micro_files(config_path, clean=True)
+    temporary_config_path = None
+    if randomize_hostname:
+        temporary_config_path = create_randomized_config(config_path)
+        config_path = temporary_config_path
+
+    try:
+        flash_firmware(firmware_path)
+        time.sleep(FIRMWARE_RESTART_DELAY_SECONDS)
+        push_micro_files(config_path, clean=True)
+    finally:
+        if temporary_config_path is not None:
+            temporary_config_path.unlink(missing_ok=True)
+
+
+def create_randomized_config(config_path):
+    config_path = validate_config_file(config_path)
+    try:
+        with config_path.open() as config_file:
+            config = json.load(config_file)
+    except (OSError, ValueError):
+        raise ValueError("Configuration file must contain valid JSON.")
+
+    wifi_config = config.get("wifi")
+    hostname = wifi_config.get("hostname") if isinstance(wifi_config, dict) else None
+    if not isinstance(hostname, str) or not hostname:
+        raise ValueError("Configuration file must contain a Wi-Fi hostname to randomize.")
+
+    wifi_config["hostname"] = randomized_hostname(hostname)
+
+    temporary_file = tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        suffix=".json",
+        prefix="bambutton-",
+        delete=False,
+    )
+    temporary_path = Path(temporary_file.name)
+    try:
+        json.dump(config, temporary_file, indent=2)
+        temporary_file.write("\n")
+    except Exception:
+        temporary_file.close()
+        temporary_path.unlink(missing_ok=True)
+        raise
+    temporary_file.close()
+    return temporary_path
+
+
+def randomized_hostname(hostname):
+    result = "{}-{}".format(hostname, random_hostname_suffix())
+    if len(result) > MAX_HOSTNAME_LENGTH:
+        max_source_length = MAX_HOSTNAME_LENGTH - HOSTNAME_SUFFIX_LENGTH - 1
+        raise ValueError(
+            "Hostname must be {} characters or fewer when randomization is enabled.".format(
+                max_source_length
+            )
+        )
+    return result
+
+
+def random_hostname_suffix():
+    return "".join(
+        secrets.choice(HOSTNAME_SUFFIX_ALPHABET)
+        for _ in range(HOSTNAME_SUFFIX_LENGTH)
+    )
 
 
 def flash_firmware(firmware_path):

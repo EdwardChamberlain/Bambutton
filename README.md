@@ -29,7 +29,10 @@ MicroPython firmware and application files, and offers two setup modes:
 - **Web GUI setup** flashes the board without a saved configuration. Configure
   it from the board's web page after flashing.
 - **Config-based setup** flashes an existing `config.json`. The assistant can
-  save an example configuration for you to edit first.
+  save an example configuration for you to edit first. Enable **Randomise
+  hostname for each board** to append a fresh four-character suffix to the
+  configured hostname for each flash, which avoids hostname conflicts when
+  provisioning multiple boards from the same file.
 
 The release tool does not require Python, `mpremote`, or `esptool`. Connect the
 board with a data-capable USB cable before starting the flash.

@@ -1,10 +1,15 @@
 import json
+import re
 import sys
 
 import pytest
 
 from bambutton import gui
 from bambutton.gui import run_python_entrypoint
+
+
+def test_random_hostname_suffix_is_four_uppercase_alphanumeric_characters():
+    assert re.fullmatch(r"[A-Z0-9]{4}", gui.random_hostname_suffix())
 
 
 def test_run_python_entrypoint_exposes_utf8_stream_encoding():
@@ -46,6 +51,7 @@ def test_update_action_states_disables_config_controls_in_web_mode(tmp_path):
                     "-CONFIG_PATH-",
                     "-CONFIG_BROWSE-",
                     "-SAVE_EXAMPLE-",
+                    "-RANDOMIZE_HOSTNAME-",
                     "-FLASH-",
                     "-STATUS-",
                 )
@@ -62,6 +68,7 @@ def test_update_action_states_disables_config_controls_in_web_mode(tmp_path):
     assert window.elements["-CONFIG_PATH-"].updates[-1] == {"disabled": True}
     assert window.elements["-CONFIG_BROWSE-"].updates[-1] == {"disabled": True}
     assert window.elements["-SAVE_EXAMPLE-"].updates[-1] == {"disabled": True}
+    assert window.elements["-RANDOMIZE_HOSTNAME-"].updates[-1] == {"disabled": True}
     assert window.elements["-FLASH-"].updates[-1] == {"disabled": False}
     assert window.elements["-STATUS-"].updates[-1] == {"value": "Ready"}
 
@@ -72,6 +79,7 @@ def test_update_action_states_disables_config_controls_in_web_mode(tmp_path):
     assert window.elements["-CONFIG_PATH-"].updates[-1] == {"disabled": False}
     assert window.elements["-CONFIG_BROWSE-"].updates[-1] == {"disabled": False}
     assert window.elements["-SAVE_EXAMPLE-"].updates[-1] == {"disabled": False}
+    assert window.elements["-RANDOMIZE_HOSTNAME-"].updates[-1] == {"disabled": False}
     assert window.elements["-FLASH-"].updates[-1] == {"disabled": False}
     assert window.elements["-STATUS-"].updates[-1] == {"value": "Ready"}
 
@@ -92,6 +100,7 @@ def test_update_action_states_prompts_for_config_file():
                     "-CONFIG_PATH-",
                     "-CONFIG_BROWSE-",
                     "-SAVE_EXAMPLE-",
+                    "-RANDOMIZE_HOSTNAME-",
                     "-FLASH-",
                     "-STATUS-",
                 )
@@ -138,6 +147,7 @@ def test_handle_save_example_config_populates_path(tmp_path, monkeypatch):
                     "-CONFIG_PATH-",
                     "-CONFIG_BROWSE-",
                     "-SAVE_EXAMPLE-",
+                    "-RANDOMIZE_HOSTNAME-",
                     "-FLASH-",
                     "-STATUS-",
                 )
@@ -180,6 +190,7 @@ def test_handle_flash_shows_progress_before_flashing(tmp_path, monkeypatch):
                     "-CONFIG_PATH-",
                     "-CONFIG_BROWSE-",
                     "-SAVE_EXAMPLE-",
+                    "-RANDOMIZE_HOSTNAME-",
                     "-FLASH-",
                     "-STATUS-",
                 )
@@ -199,12 +210,21 @@ def test_handle_flash_shows_progress_before_flashing(tmp_path, monkeypatch):
 
     monkeypatch.setattr(gui, "first_firmware_file", lambda: firmware_path)
     monkeypatch.setattr(gui, "config_path_for_mode", lambda values: None)
-    monkeypatch.setattr(gui, "flash_board", lambda firmware, config: events.append((firmware, config)))
+    monkeypatch.setattr(
+        gui,
+        "flash_board",
+        lambda firmware, config, randomize_hostname=False: events.append(
+            (firmware, config, randomize_hostname)
+        ),
+    )
     monkeypatch.setattr(gui.sg, "popup", lambda *args: None, raising=False)
 
-    gui.handle_flash(window, {"-WEB-": True})
+    gui.handle_flash(
+        window,
+        {"-WEB-": True, "-CONFIG-": False, "-RANDOMIZE_HOSTNAME-": True},
+    )
 
-    assert events == [(firmware_path, None)]
+    assert events == [(firmware_path, None, False)]
     assert window.refresh_calls == 1
     assert window.elements["-STATUS-"].updates == [
         {"value": "Flashing..."},
@@ -301,3 +321,71 @@ def test_flash_board_flashes_firmware_before_application_files(tmp_path, monkeyp
         ("sleep", gui.FIRMWARE_RESTART_DELAY_SECONDS),
         ("files", config_path, True),
     ]
+
+
+def test_create_randomized_config_only_changes_hostname(tmp_path, monkeypatch):
+    config_path = tmp_path / "config.json"
+    source_config = {
+        "wifi": {"hostname": "shop-button", "ssid": "shop"},
+        "api": {"base_url": "http://bambuddy"},
+    }
+    config_path.write_text(json.dumps(source_config))
+    monkeypatch.setattr(gui, "random_hostname_suffix", lambda: "ABCD")
+
+    randomized_path = gui.create_randomized_config(config_path)
+
+    try:
+        randomized_config = json.loads(randomized_path.read_text())
+        assert randomized_config["wifi"]["hostname"] == "shop-button-ABCD"
+        assert randomized_config["wifi"]["ssid"] == source_config["wifi"]["ssid"]
+        assert randomized_config["api"] == source_config["api"]
+        assert json.loads(config_path.read_text()) == source_config
+    finally:
+        randomized_path.unlink(missing_ok=True)
+
+
+def test_flash_board_cleans_randomized_config_after_flashing(tmp_path, monkeypatch):
+    firmware_path = tmp_path / "firmware.bin"
+    firmware_path.write_bytes(b"firmware")
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps({"wifi": {"hostname": "shop-button"}}))
+    flashed_config = {}
+
+    monkeypatch.setattr(gui, "random_hostname_suffix", lambda: "ABCD")
+    monkeypatch.setattr(gui, "flash_firmware", lambda path: None)
+    monkeypatch.setattr(gui.time, "sleep", lambda seconds: None)
+
+    def capture_config(path, clean=False):
+        flashed_config["path"] = path
+        flashed_config["contents"] = json.loads(path.read_text())
+
+    monkeypatch.setattr(gui, "push_micro_files", capture_config)
+
+    gui.flash_board(firmware_path, config_path, randomize_hostname=True)
+
+    assert flashed_config["contents"]["wifi"]["hostname"] == "shop-button-ABCD"
+    assert not flashed_config["path"].exists()
+    assert json.loads(config_path.read_text())["wifi"]["hostname"] == "shop-button"
+
+
+def test_create_randomized_config_accepts_maximum_valid_hostname(tmp_path, monkeypatch):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps({"wifi": {"hostname": "a" * 58}}))
+    monkeypatch.setattr(gui, "random_hostname_suffix", lambda: "ABCD")
+
+    randomized_path = gui.create_randomized_config(config_path)
+
+    try:
+        randomized_config = json.loads(randomized_path.read_text())
+        assert len(randomized_config["wifi"]["hostname"]) == 63
+    finally:
+        randomized_path.unlink(missing_ok=True)
+
+
+def test_create_randomized_config_rejects_hostname_that_would_exceed_limit(tmp_path, monkeypatch):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps({"wifi": {"hostname": "a" * 59}}))
+    monkeypatch.setattr(gui, "random_hostname_suffix", lambda: "ABCD")
+
+    with pytest.raises(ValueError, match="58 characters or fewer"):
+        gui.create_randomized_config(config_path)
