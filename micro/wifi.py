@@ -4,6 +4,7 @@ import time
 
 DEFAULT_HOSTNAME = "bambutton"
 RETRY_DELAY_SECONDS = 10
+AP_RETRY_INTERVAL_SECONDS = 30
 DEFAULT_AP_PASSWORD = "bambutton"
 STA_IF = getattr(network, "STA_IF", getattr(network.WLAN, "IF_STA", 0))
 AP_IF = getattr(network, "AP_IF", getattr(network.WLAN, "IF_AP", 1))
@@ -81,6 +82,29 @@ class WiFi:
         if fallback_to_ap:
             return self.connect_with_fallback(watchdog_feed=watchdog_feed)
         return self.connect_forever(watchdog_feed=watchdog_feed)
+
+    def retry_station_from_access_point(self, watchdog_feed=None):
+        if not self.is_ap_mode():
+            return self.is_connected()
+
+        access_point = self.ap
+        try:
+            station = self.connect(watchdog_feed=watchdog_feed)
+        except Exception as exc:
+            print("Wi-Fi station retry failed:", exc)
+            try:
+                self.disconnect()
+            except Exception:
+                pass
+            return access_point
+
+        try:
+            access_point.active(False)
+        except Exception as exc:
+            print("Could not disable setup access point:", exc)
+            return access_point
+        self.ap = None
+        return station
 
     def disconnect(self):
         self.wlan.disconnect()

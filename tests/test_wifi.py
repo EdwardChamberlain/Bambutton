@@ -249,3 +249,45 @@ def test_setup_access_point_uses_configured_hostname(monkeypatch):
         "essid": "bambutton-ABCD",
         "password": "bambutton",
     }) in events
+
+
+def test_station_retry_restores_wifi_when_saved_network_returns(monkeypatch):
+    events = []
+    wifi_module = load_wifi_module(
+        monkeypatch,
+        events,
+        connect_results=[False, True],
+        tick_increment_ms=10_001,
+    )
+    wifi = wifi_module.WiFi("ssid", "password", timeout_seconds=10)
+    wifi.connect_with_fallback()
+    access_point = wifi.ap
+
+    result = wifi.retry_station_from_access_point()
+
+    assert result is wifi.wlan
+    assert access_point is not wifi.ap
+    assert access_point.interface == 1
+    assert wifi.is_ap_mode() is False
+    assert wifi.is_connected() is True
+
+
+def test_station_retry_keeps_setup_access_point_when_network_is_still_down(
+    monkeypatch,
+):
+    events = []
+    wifi_module = load_wifi_module(
+        monkeypatch,
+        events,
+        connect_results=[False, False],
+        tick_increment_ms=10_001,
+    )
+    wifi = wifi_module.WiFi("ssid", "password", timeout_seconds=10)
+    wifi.connect_with_fallback()
+    setup_access_point = wifi.ap
+
+    access_point = wifi.retry_station_from_access_point()
+
+    assert access_point is setup_access_point
+    assert wifi.is_ap_mode() is True
+    assert wifi.ap is setup_access_point
