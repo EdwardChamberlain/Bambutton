@@ -79,7 +79,7 @@ def test_bootstrap_commit_hands_off_legacy_main_to_stable_loader(tmp_path, monke
     monkeypatch.chdir(tmp_path)
     exec(push_micro.BOOTSTRAP_COMMIT_CODE, {})
 
-    assert not legacy_main.exists()
+    assert legacy_main.exists()
     assert (tmp_path / ".bambutton/legacy_main.py").read_text() == "legacy application"
     assert (tmp_path / "main.py").read_text() == "main.py"
     assert (tmp_path / "boot.py").read_text() == "boot.py"

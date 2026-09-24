@@ -421,6 +421,29 @@ def render_update_section(status):
     status = status if isinstance(status, dict) else {}
     current = _escape_html(status.get("current_version") or "legacy/unknown")
     active_slot = _escape_html(status.get("active_slot") or "legacy")
+    inactive_slot = "app_b" if status.get("active_slot") == "app_a" else "app_a"
+    slots = status.get("slots", {})
+    if not isinstance(slots, dict):
+        slots = {}
+    inactive_status = slots.get(inactive_slot, {})
+    if not isinstance(inactive_status, dict):
+        inactive_status = {}
+    inactive_state = (
+        "staged"
+        if status.get("staged_slot") == inactive_slot
+        else "ready" if inactive_status.get("ready") else "empty"
+    )
+    inactive_summary = "{} — {}".format(inactive_slot, inactive_state)
+    if inactive_status.get("version"):
+        inactive_summary += " (version {})".format(
+            inactive_status["version"]
+        )
+    inactive_summary = _escape_html(inactive_summary)
+    install_disabled = (
+        ""
+        if status.get("staged_slot") in ota_manager.SLOT_NAMES
+        else " disabled"
+    )
     error = status.get("last_error") or {}
     error_text = error.get("message", "") if isinstance(error, dict) else str(error)
     error_html = (
@@ -432,6 +455,7 @@ def render_update_section(status):
           <legend>Application updates</legend>
           <p>Current version: <strong id="update-version">{current}</strong></p>
           <p>Active slot: <strong id="update-slot">{slot}</strong></p>
+          <p>Inactive slot: <strong id="update-inactive-slot">{inactive}</strong></p>
           <p>Updates replace application files only in the inactive application slot. Your Wi-Fi, API, printer, and web settings are preserved.</p>
           <p><strong>Warning:</strong> anyone who can access this authenticated LAN page can install an application update.</p>
           {error}
@@ -441,49 +465,106 @@ def render_update_section(status):
           </label>
           <button type="button" id="upload-update">Stage local bundle</button>
           <p id="update-status" aria-live="polite"></p>
-          <button type="button" id="install-update" disabled>Install staged update and restart</button>
+          <progress id="update-progress" max="100" value="0" hidden style="width: 100%" aria-label="Update progress"></progress>
+          <button type="button" id="install-update"{install_disabled}>Install staged update and restart</button>
           <p><a href="/update">Open update page</a></p>
         </fieldset>
         <script>
           const updateStatus = document.getElementById("update-status");
           const installButton = document.getElementById("install-update");
+          const inactiveSlotStatus = document.getElementById("update-inactive-slot");
+          const progress = document.getElementById("update-progress");
           const setUpdateStatus = (message) => {{ updateStatus.textContent = message; }};
+          const showIndeterminateProgress = () => {{
+            progress.hidden = false;
+            progress.removeAttribute("value");
+          }};
+          const hideProgress = () => {{
+            progress.hidden = true;
+            progress.max = 100;
+            progress.value = 0;
+          }};
           const updateRequest = async (path, options) => {{
             const response = await fetch(path, options || {{}});
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || "Update request failed");
             return data;
           }};
-          const staged = (data) => {{
+          const updateSlotStatus = (data) => {{
+            const inactive = data.active_slot === "app_a" ? "app_b" : "app_a";
+            const slot = (data.slots || {{}})[inactive] || {{}};
+            const state = data.staged_slot === inactive ? "staged" : slot.ready ? "ready" : "empty";
+            const version = slot.version ? " (version " + slot.version + ")" : "";
+            inactiveSlotStatus.textContent = inactive + " — " + state + version;
             installButton.disabled = !data.staged_slot;
+          }};
+          const staged = (data) => {{
+            updateSlotStatus(data);
+            hideProgress();
             if (data.staged_slot) setUpdateStatus("Verified update staged in " + data.staged_slot + ".");
           }};
           document.getElementById("check-update").addEventListener("click", async () => {{
             setUpdateStatus("Checking and staging the official release...");
+            showIndeterminateProgress();
             try {{ staged(await updateRequest("/api/update/check", {{method: "POST"}})); }}
-            catch (error) {{ setUpdateStatus(error.message); }}
+            catch (error) {{ hideProgress(); setUpdateStatus(error.message); }}
+          }});
+          const uploadBundle = (body) => new Promise((resolve, reject) => {{
+            const request = new XMLHttpRequest();
+            request.open("POST", "/api/update/upload");
+            request.setRequestHeader("Content-Type", "application/json");
+            request.upload.addEventListener("progress", (event) => {{
+              if (!event.lengthComputable) {{
+                showIndeterminateProgress();
+                return;
+              }}
+              progress.hidden = false;
+              progress.max = event.total;
+              progress.value = event.loaded;
+              const percent = Math.floor(event.loaded * 100 / event.total);
+              setUpdateStatus("Uploading local bundle: " + percent + "%");
+            }});
+            request.upload.addEventListener("load", () => {{
+              showIndeterminateProgress();
+              setUpdateStatus("Upload complete; verifying and staging...");
+            }});
+            request.addEventListener("load", () => {{
+              let data;
+              try {{ data = JSON.parse(request.responseText); }}
+              catch (_error) {{ reject(new Error("The device returned an invalid response.")); return; }}
+              if (request.status < 200 || request.status >= 300) {{
+                reject(new Error(data.error || "Update request failed"));
+                return;
+              }}
+              resolve(data);
+            }});
+            request.addEventListener("error", () => reject(new Error("The update upload failed.")));
+            request.send(body);
           }});
           document.getElementById("upload-update").addEventListener("click", async () => {{
             const file = document.getElementById("update-file").files[0];
             if (!file) {{ setUpdateStatus("Choose a JSON update bundle first."); return; }}
             setUpdateStatus("Uploading and verifying the local bundle...");
-            try {{
-              staged(await updateRequest("/api/update/upload", {{
-                method: "POST",
-                headers: {{"Content-Type": "application/json"}},
-                body: await file.text(),
-              }}));
-            }} catch (error) {{ setUpdateStatus(error.message); }}
+            showIndeterminateProgress();
+            try {{ staged(await uploadBundle(await file.text())); }}
+            catch (error) {{ hideProgress(); setUpdateStatus(error.message); }}
           }});
           installButton.addEventListener("click", async () => {{
             if (!window.confirm("Install the staged application and restart the board?")) return;
             setUpdateStatus("Switching application slots and restarting...");
             installButton.disabled = true;
+            showIndeterminateProgress();
             try {{ await updateRequest("/api/update/install", {{method: "POST"}}); }}
-            catch (error) {{ setUpdateStatus(error.message); installButton.disabled = false; }}
+            catch (error) {{ hideProgress(); setUpdateStatus(error.message); installButton.disabled = false; }}
           }});
         </script>
-    """.format(current=current, slot=active_slot, error=error_html)
+    """.format(
+        current=current,
+        slot=active_slot,
+        inactive=inactive_summary,
+        install_disabled=install_disabled,
+        error=error_html,
+    )
 
 
 def render_debug_page(config, status):

@@ -307,6 +307,33 @@ def test_config_page_contains_atomic_update_controls():
     assert "inactive application slot" in page
 
 
+def test_update_page_shows_inactive_slot_and_transfer_progress():
+    status = {
+        "current_version": "1.0.0",
+        "active_slot": "app_a",
+        "staged_slot": None,
+        "slots": {
+            "app_a": {"ready": True, "version": "1.0.0"},
+            "app_b": {"ready": True, "version": "0.9.0"},
+        },
+    }
+
+    page = web_config.render_update_page(status)
+
+    assert '<strong id="update-inactive-slot">app_b — ready (version 0.9.0)</strong>' in page
+    assert '<progress id="update-progress"' in page
+    assert 'request.upload.addEventListener("progress"' in page
+    assert '"Uploading local bundle: " + percent + "%"' in page
+    assert 'id="install-update" disabled' in page
+
+    status["staged_slot"] = "app_b"
+    status["slots"]["app_b"] = {"ready": True, "version": "2.0.0"}
+    page = web_config.render_update_page(status)
+
+    assert '<strong id="update-inactive-slot">app_b — staged (version 2.0.0)</strong>' in page
+    assert 'id="install-update" disabled' not in page
+
+
 def test_update_routes_stage_and_commit_without_touching_config(tmp_path):
     config_path = tmp_path / "config.json"
     config_path.write_text(json.dumps(base_config()))
