@@ -91,7 +91,7 @@ jobs:
       - name: Build and install wheel
         run: |
           python -m build --wheel
-          python -m pip install --force-reinstall --no-deps dist/*.whl
+          python -c "import glob, subprocess, sys; wheels = glob.glob('dist/*.whl'); assert len(wheels) == 1, wheels; subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--force-reinstall', '--no-deps', wheels[0]])"
 
       - name: Smoke-test installed setup tool
         run: python -m bambutton --self-test
