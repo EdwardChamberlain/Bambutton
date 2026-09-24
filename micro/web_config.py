@@ -10,12 +10,17 @@ try:
 except ImportError:
     import base64 as _base64
 
+try:
+    import ota_manager
+except ImportError:
+    from micro import ota_manager
+
 
 CONFIG_PATH = "config.json"
 DEFAULT_HOSTNAME = "bambutton"
 DEFAULT_WEB_PASSWORD = "bambutton"
 WEB_AUTH_USERNAME = "admin"
-MAX_REQUEST_BYTES = 8192
+MAX_REQUEST_BYTES = 128 * 1024
 
 
 class WebConfigServer:
@@ -35,12 +40,14 @@ class WebConfigServer:
         host="0.0.0.0",
         port=80,
         socket_module=socket,
+        update_manager=None,
     ):
         self.config = config
         self.api = api
         self.status_provider = status_provider or (lambda: {})
         self.config_path = config_path
         self.socket_module = socket_module
+        self.update_manager = update_manager or ota_manager.OTAUpdateManager()
         self.restart_requested = False
 
         self.listener = socket_module.socket()
@@ -107,6 +114,7 @@ class WebConfigServer:
         return restart_requested
 
     def handle_request(self, method, path, body="", headers=None):
+        update_manager = self._get_update_manager()
         if not self._is_authorized(headers or {}):
             return 401, "text/html; charset=utf-8", _error_page(
                 "Authentication required",
@@ -119,7 +127,45 @@ class WebConfigServer:
             message = ""
             if "saved=1" in path:
                 message = "Settings saved. The board will restart to apply them."
-            return 200, "text/html; charset=utf-8", render_config_page(self.config, message)
+            return 200, "text/html; charset=utf-8", render_config_page(
+                self.config,
+                message,
+                update_manager.status(),
+            )
+
+        if method == "GET" and route == "/update":
+            return 200, "text/html; charset=utf-8", render_update_page(
+                update_manager.status()
+            )
+
+        if method == "GET" and route == "/api/update/status":
+            return 200, "application/json", _json_dumps(
+                update_manager.status()
+            )
+
+        if method == "POST" and route == "/api/update/check":
+            try:
+                status = update_manager.check_remote()
+                return 200, "application/json", _json_dumps(status)
+            except ota_manager.OTAError as exc:
+                return 400, "application/json", _json_dumps({"error": str(exc)})
+            except Exception as exc:
+                return 502, "application/json", _json_dumps({"error": str(exc)})
+
+        if method == "POST" and route == "/api/update/upload":
+            try:
+                status = update_manager.stage_bundle(json.loads(body or "{}"))
+                return 200, "application/json", _json_dumps(status)
+            except (ValueError, ota_manager.OTAError) as exc:
+                return 400, "application/json", _json_dumps({"error": str(exc)})
+
+        if method == "POST" and route == "/api/update/install":
+            try:
+                status = update_manager.commit_staged()
+                self.restart_requested = True
+                return 200, "application/json", _json_dumps(status)
+            except ota_manager.OTAError as exc:
+                return 400, "application/json", _json_dumps({"error": str(exc)})
 
         if method == "GET" and route == "/debug":
             return 200, "text/html; charset=utf-8", render_debug_page(self.config, self.status_provider())
@@ -146,9 +192,17 @@ class WebConfigServer:
             return 200, "text/html; charset=utf-8", render_config_page(
                 self.config,
                 "Settings saved. The board will restart to apply them.",
+                update_manager.status(),
             )
 
         return 404, "text/html; charset=utf-8", _error_page("Not found", "The requested page does not exist.")
+
+    def _get_update_manager(self):
+        manager = getattr(self, "update_manager", None)
+        if manager is None:
+            manager = ota_manager.OTAUpdateManager()
+            self.update_manager = manager
+        return manager
 
     def _is_authorized(self, headers):
         configured_password = self.config.get("web", {}).get(
@@ -245,7 +299,7 @@ def save_config(path, config):
         config_file.write("\n")
 
 
-def render_config_page(config, message=""):
+def render_config_page(config, message="", update_status=None):
     wifi = config.get("wifi", {})
     api = config.get("api", {})
     printer = config.get("printer", {})
@@ -291,6 +345,7 @@ def render_config_page(config, message=""):
           </fieldset>
           <button type="submit">Save and restart</button>
         </form>
+        __UPDATE_SECTION__
         <p><a href="/debug">Open debug information</a></p>
         <script>
           const printerSelect = document.getElementById("printer_id");
@@ -345,11 +400,171 @@ def render_config_page(config, message=""):
         "__PRINTER_ID__": _escape_html(printer.get("id", "")),
         "__LED_PIN__": _escape_html(led.get("pin", "")),
         "__BUTTON_PIN__": _escape_html(button.get("pin", "")),
+        "__UPDATE_SECTION__": render_update_section(update_status or {}),
     }
     for marker, value in replacements.items():
         content = content.replace(marker, value)
 
     return _page("Bambutton configuration", content)
+
+
+def render_update_page(status):
+    return _page(
+        "Bambutton update",
+        "<h1>Bambutton application update</h1>{}<p><a href=\"/\">Back to configuration</a></p>".format(
+            render_update_section(status)
+        ),
+    )
+
+
+def render_update_section(status):
+    status = status if isinstance(status, dict) else {}
+    current = _escape_html(status.get("current_version") or "legacy/unknown")
+    active_slot = _escape_html(status.get("active_slot") or "legacy")
+    inactive_slot = "app_b" if status.get("active_slot") == "app_a" else "app_a"
+    slots = status.get("slots", {})
+    if not isinstance(slots, dict):
+        slots = {}
+    inactive_status = slots.get(inactive_slot, {})
+    if not isinstance(inactive_status, dict):
+        inactive_status = {}
+    inactive_state = (
+        "staged"
+        if status.get("staged_slot") == inactive_slot
+        else "ready" if inactive_status.get("ready") else "empty"
+    )
+    inactive_summary = "{} — {}".format(inactive_slot, inactive_state)
+    if inactive_status.get("version"):
+        inactive_summary += " (version {})".format(
+            inactive_status["version"]
+        )
+    inactive_summary = _escape_html(inactive_summary)
+    install_disabled = (
+        ""
+        if status.get("staged_slot") in ota_manager.SLOT_NAMES
+        else " disabled"
+    )
+    error = status.get("last_error") or {}
+    error_text = error.get("message", "") if isinstance(error, dict) else str(error)
+    error_html = (
+        '<p class="error">Last update error: {}</p>'.format(_escape_html(error_text))
+        if error_text else ""
+    )
+    return """
+        <fieldset id="updates">
+          <legend>Application updates</legend>
+          <p>Current version: <strong id="update-version">{current}</strong></p>
+          <p>Active slot: <strong id="update-slot">{slot}</strong></p>
+          <p>Inactive slot: <strong id="update-inactive-slot">{inactive}</strong></p>
+          <p>Updates replace application files only in the inactive application slot. Your Wi-Fi, API, printer, and web settings are preserved.</p>
+          <p><strong>Warning:</strong> anyone who can access this authenticated LAN page can install an application update.</p>
+          {error}
+          <button type="button" id="check-update">Check official release</button>
+          <label>Local update bundle
+            <input id="update-file" type="file" accept="application/json,.json">
+          </label>
+          <button type="button" id="upload-update">Stage local bundle</button>
+          <p id="update-status" aria-live="polite"></p>
+          <progress id="update-progress" max="100" value="0" hidden style="width: 100%" aria-label="Update progress"></progress>
+          <button type="button" id="install-update"{install_disabled}>Install staged update and restart</button>
+          <p><a href="/update">Open update page</a></p>
+        </fieldset>
+        <script>
+          const updateStatus = document.getElementById("update-status");
+          const installButton = document.getElementById("install-update");
+          const inactiveSlotStatus = document.getElementById("update-inactive-slot");
+          const progress = document.getElementById("update-progress");
+          const setUpdateStatus = (message) => {{ updateStatus.textContent = message; }};
+          const showIndeterminateProgress = () => {{
+            progress.hidden = false;
+            progress.removeAttribute("value");
+          }};
+          const hideProgress = () => {{
+            progress.hidden = true;
+            progress.max = 100;
+            progress.value = 0;
+          }};
+          const updateRequest = async (path, options) => {{
+            const response = await fetch(path, options || {{}});
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || "Update request failed");
+            return data;
+          }};
+          const updateSlotStatus = (data) => {{
+            const inactive = data.active_slot === "app_a" ? "app_b" : "app_a";
+            const slot = (data.slots || {{}})[inactive] || {{}};
+            const state = data.staged_slot === inactive ? "staged" : slot.ready ? "ready" : "empty";
+            const version = slot.version ? " (version " + slot.version + ")" : "";
+            inactiveSlotStatus.textContent = inactive + " — " + state + version;
+            installButton.disabled = !data.staged_slot;
+          }};
+          const staged = (data) => {{
+            updateSlotStatus(data);
+            hideProgress();
+            if (data.staged_slot) setUpdateStatus("Verified update staged in " + data.staged_slot + ".");
+          }};
+          document.getElementById("check-update").addEventListener("click", async () => {{
+            setUpdateStatus("Checking and staging the official release...");
+            showIndeterminateProgress();
+            try {{ staged(await updateRequest("/api/update/check", {{method: "POST"}})); }}
+            catch (error) {{ hideProgress(); setUpdateStatus(error.message); }}
+          }});
+          const uploadBundle = (body) => new Promise((resolve, reject) => {{
+            const request = new XMLHttpRequest();
+            request.open("POST", "/api/update/upload");
+            request.setRequestHeader("Content-Type", "application/json");
+            request.upload.addEventListener("progress", (event) => {{
+              if (!event.lengthComputable) {{
+                showIndeterminateProgress();
+                return;
+              }}
+              progress.hidden = false;
+              progress.max = event.total;
+              progress.value = event.loaded;
+              const percent = Math.floor(event.loaded * 100 / event.total);
+              setUpdateStatus("Uploading local bundle: " + percent + "%");
+            }});
+            request.upload.addEventListener("load", () => {{
+              showIndeterminateProgress();
+              setUpdateStatus("Upload complete; verifying and staging...");
+            }});
+            request.addEventListener("load", () => {{
+              let data;
+              try {{ data = JSON.parse(request.responseText); }}
+              catch (_error) {{ reject(new Error("The device returned an invalid response.")); return; }}
+              if (request.status < 200 || request.status >= 300) {{
+                reject(new Error(data.error || "Update request failed"));
+                return;
+              }}
+              resolve(data);
+            }});
+            request.addEventListener("error", () => reject(new Error("The update upload failed.")));
+            request.send(body);
+          }});
+          document.getElementById("upload-update").addEventListener("click", async () => {{
+            const file = document.getElementById("update-file").files[0];
+            if (!file) {{ setUpdateStatus("Choose a JSON update bundle first."); return; }}
+            setUpdateStatus("Uploading and verifying the local bundle...");
+            showIndeterminateProgress();
+            try {{ staged(await uploadBundle(await file.text())); }}
+            catch (error) {{ hideProgress(); setUpdateStatus(error.message); }}
+          }});
+          installButton.addEventListener("click", async () => {{
+            if (!window.confirm("Install the staged application and restart the board?")) return;
+            setUpdateStatus("Switching application slots and restarting...");
+            installButton.disabled = true;
+            showIndeterminateProgress();
+            try {{ await updateRequest("/api/update/install", {{method: "POST"}}); }}
+            catch (error) {{ hideProgress(); setUpdateStatus(error.message); installButton.disabled = false; }}
+          }});
+        </script>
+    """.format(
+        current=current,
+        slot=active_slot,
+        inactive=inactive_summary,
+        install_disabled=install_disabled,
+        error=error_html,
+    )
 
 
 def render_debug_page(config, status):

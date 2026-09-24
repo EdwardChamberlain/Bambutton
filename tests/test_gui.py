@@ -271,10 +271,12 @@ def test_push_micro_files_installs_selected_file_as_config_json(tmp_path, monkey
     gui.push_micro_files(config_path, clean=True)
 
     assert calls[0][0] == "exec"
-    assert calls[1][1:] == [str(micro_dir / "a_module.py"), ":"]
-    assert calls[2][1:] == [str(micro_dir / "b_module.py"), ":"]
-    assert calls[3][1:] == [str(config_path), ":config.json"]
-    assert calls[4] == ["reset"]
+    assert calls[1][0] == "exec"
+    assert calls[2][1:] == [str(micro_dir / "a_module.py"), ":.bambutton/bootstrap/a_module.py"]
+    assert calls[3][1:] == [str(micro_dir / "b_module.py"), ":.bambutton/bootstrap/b_module.py"]
+    assert calls[4][1:] == [str(config_path), ":.bambutton/bootstrap/config.json"]
+    assert calls[5][0] == "exec"
+    assert calls[6] == ["reset"]
 
 
 def test_push_micro_files_omits_config_for_web_gui_setup(tmp_path, monkeypatch):
@@ -288,7 +290,7 @@ def test_push_micro_files_omits_config_for_web_gui_setup(tmp_path, monkeypatch):
 
     gui.push_micro_files(None, clean=True)
 
-    assert [call[0] for call in calls] == ["exec", "cp", "reset"]
+    assert [call[0] for call in calls] == ["exec", "exec", "cp", "exec", "reset"]
 
 
 def test_mpremote_args_uses_auto_detection():
