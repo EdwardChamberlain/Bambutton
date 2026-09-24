@@ -37,7 +37,9 @@ DEFAULT_CONFIG = {
         "request_timeout_seconds": 3,
     },
     "printer": {
-        "id": 3,
+        # A printer must be selected in setup. Never guess a device ID: a
+        # default ID can send a button press to an unrelated printer.
+        "id": None,
         "poll_interval_seconds": 5,
     },
     "led": {
@@ -54,6 +56,22 @@ DEFAULT_CONFIG = {
         "password": "bambutton",
     },
 }
+
+
+_STRING_FIELDS = {
+    "wifi": ("ssid", "password", "hostname", "ap_password"),
+    "api": ("base_url", "key"),
+    "button": ("pull", "trigger"),
+    "web": ("password",),
+}
+_NUMBER_FIELDS = {
+    "wifi": ("timeout_seconds",),
+    "api": ("request_timeout_seconds",),
+    "printer": ("poll_interval_seconds",),
+    "led": ("pin", "flash_interval_ms"),
+    "button": ("pin", "debounce_ms"),
+}
+_KNOWN_SECTIONS = tuple(DEFAULT_CONFIG.keys())
 
 
 def load_config(path="config.json"):
@@ -76,6 +94,30 @@ def load_config(path="config.json"):
     if source_path != path:
         print("Recovered configuration from backup:", source_path)
     return config
+
+
+def is_runtime_config_ready(config):
+    """Return whether the settings can safely address a printer API."""
+    if not isinstance(config, dict):
+        return False
+
+    wifi = config.get("wifi")
+    api = config.get("api")
+    printer = config.get("printer")
+    if not isinstance(wifi, dict) or not isinstance(api, dict):
+        return False
+    if not isinstance(printer, dict):
+        return False
+
+    printer_id = printer.get("id")
+    return bool(
+        wifi.get("ssid")
+        and api.get("base_url")
+        and api.get("key")
+        and isinstance(printer_id, int)
+        and not isinstance(printer_id, bool)
+        and printer_id >= 0
+    )
 
 
 def save_config(path, config):
@@ -138,7 +180,44 @@ def _load_config_file(path):
             loaded_config = json.load(config_file)
     except (OSError, ValueError, TypeError):
         return None
-    return loaded_config if isinstance(loaded_config, dict) else None
+    if not _is_valid_config_shape(loaded_config):
+        return None
+    return loaded_config
+
+
+def _is_valid_config_shape(config):
+    if not isinstance(config, dict):
+        return False
+
+    for section in _KNOWN_SECTIONS:
+        if section in config and not isinstance(config[section], dict):
+            return False
+
+    for section, fields in _STRING_FIELDS.items():
+        values = config.get(section, {})
+        for field in fields:
+            if field in values and not isinstance(values[field], str):
+                return False
+
+    for section, fields in _NUMBER_FIELDS.items():
+        values = config.get(section, {})
+        for field in fields:
+            value = values.get(field)
+            if field in values and (
+                not isinstance(value, (int, float)) or isinstance(value, bool)
+            ):
+                return False
+
+    if "id" in config.get("printer", {}):
+        printer_id = config["printer"]["id"]
+        if printer_id is not None and (
+            not isinstance(printer_id, int)
+            or isinstance(printer_id, bool)
+            or printer_id < 0
+        ):
+            return False
+
+    return True
 
 
 def _remove_file(path):
