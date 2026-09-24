@@ -241,6 +241,47 @@ def test_config_setup_requires_a_json_object(tmp_path):
     assert gui.config_path_for_mode({"-CONFIG-": True, "-CONFIG_PATH-": str(config_path)}) == config_path
 
 
+def test_installed_setup_self_test_checks_micro_files_and_firmware(
+    tmp_path, monkeypatch
+):
+    micro_dir = tmp_path / "micro"
+    firmware_dir = tmp_path / "firmware"
+    micro_dir.mkdir()
+    firmware_dir.mkdir()
+    for name in (
+        "api.py", "app_main.py", "bambuddy_api.py", "boot.py",
+        "config_loader.py", "gpio_button.py", "led_flasher.py", "main.py",
+        "ota_manager.py", "periodic_timer.py", "web_config.py", "wifi.py",
+        "config_example.json",
+    ):
+        (micro_dir / name).write_text(name)
+    (firmware_dir / "esp32.bin").write_bytes(b"firmware")
+    monkeypatch.setattr(gui, "MICRO_DIR", micro_dir)
+    monkeypatch.setattr(gui, "DEFAULT_FIRMWARE_DIR", firmware_dir)
+
+    gui.run_installation_self_test()
+
+
+def test_installed_setup_self_test_reports_missing_resources(tmp_path, monkeypatch):
+    micro_dir = tmp_path / "micro"
+    micro_dir.mkdir()
+    monkeypatch.setattr(gui, "MICRO_DIR", micro_dir)
+
+    with pytest.raises(RuntimeError, match="installation is missing"):
+        gui.run_installation_self_test()
+
+
+def test_gui_main_runs_self_test_without_opening_window(monkeypatch):
+    calls = []
+    monkeypatch.setattr(sys, "argv", ["Bambutton", "--self-test"])
+    monkeypatch.setattr(gui, "run_installation_self_test", lambda: calls.append(True))
+    monkeypatch.setattr(gui, "build_window", lambda: pytest.fail("window was opened"))
+
+    gui.main()
+
+    assert calls == [True]
+
+
 @pytest.mark.parametrize(
     "contents,error",
     [
