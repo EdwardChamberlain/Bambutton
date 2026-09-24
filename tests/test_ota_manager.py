@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import io
 import json
 
 import pytest
@@ -215,7 +216,10 @@ def test_remote_check_uses_https_and_same_staging_pipeline(tmp_path):
 
     class Response:
         status_code = 200
-        text = payload
+
+        def __init__(self):
+            self.raw = io.BytesIO(payload.encode("utf-8"))
+            self.headers = {"Content-Length": str(len(payload))}
 
         def close(self):
             self.closed = True
@@ -238,7 +242,41 @@ def test_remote_check_uses_https_and_same_staging_pipeline(tmp_path):
 def test_remote_check_rejects_oversized_json_before_parsing(tmp_path):
     class Response:
         status_code = 200
-        text = " " * (ota_manager.MAX_BUNDLE_BODY_BYTES + 1)
+
+        def __init__(self):
+            self.raw = io.BytesIO(b" " * (ota_manager.MAX_BUNDLE_BODY_BYTES + 1))
+            self.bytes_read = 0
+
+        @property
+        def headers(self):
+            return {}
+
+        def close(self):
+            self.closed = True
+
+    response = Response()
+    manager = ota_manager.OTAUpdateManager(
+        root=str(tmp_path), request_get=lambda url: response
+    )
+
+    with pytest.raises(ota_manager.OTAError, match="payload is too large"):
+        manager.check_remote()
+
+    assert response.closed is True
+
+
+def test_remote_check_rejects_large_content_length_without_reading(tmp_path):
+    class Response:
+        status_code = 200
+        headers = {
+            "content-length": str(ota_manager.MAX_BUNDLE_BODY_BYTES + 1),
+        }
+
+        class Stream:
+            def read(self, _size):
+                raise AssertionError("oversized response should not be read")
+
+        raw = Stream()
 
         def close(self):
             self.closed = True

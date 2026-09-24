@@ -686,15 +686,21 @@ def _read_request(client):
     except ValueError:
         raise ValueError("Invalid content length")
 
-    if body_length < 0 or body_length > MAX_REQUEST_BYTES:
+    route = request_line[1].split("?", 1)[0]
+    max_body_bytes = (
+        ota_manager.MAX_BUNDLE_BODY_BYTES
+        if route == "/api/update/upload"
+        else MAX_REQUEST_BYTES
+    )
+    if body_length < 0 or body_length > max_body_bytes:
         raise ValueError("Request body is too large")
 
-    body = request[header_end + 4:]
+    body = bytearray(request[header_end + 4:])
     while len(body) < body_length:
         chunk = client.recv(min(512, body_length - len(body)))
         if not chunk:
             break
-        body += chunk
+        body.extend(chunk)
 
     if len(body) != body_length:
         raise ValueError("Incomplete HTTP request body")

@@ -123,13 +123,14 @@ class OTAUpdateManager:
                 status_code = getattr(response, "status_code", 200)
                 if status_code < 200 or status_code >= 300:
                     raise OTAError("Remote update returned HTTP {}".format(status_code))
-                body = response.text
+                body = _read_response_body_limited(
+                    response,
+                    MAX_BUNDLE_BODY_BYTES,
+                )
             finally:
                 close = getattr(response, "close", None)
                 if close:
                     close()
-            if _json_body_size(body) > MAX_BUNDLE_BODY_BYTES:
-                raise OTAError("Update bundle payload is too large")
             bundle = _parse_json_body(body)
             self.stage_bundle(bundle)
             return self.status()
@@ -768,6 +769,52 @@ def _parse_json_body(body):
         return json.loads(body)
     except (TypeError, ValueError) as exc:
         raise OTAError("Remote update did not return valid JSON: {}".format(exc))
+
+
+def _read_response_body_limited(response, max_bytes):
+    """Read a response incrementally so an oversized body is never buffered."""
+    headers = getattr(response, "headers", None)
+    content_length = None
+    if headers:
+        for name, value in headers.items():
+            if str(name).lower() == "content-length":
+                try:
+                    content_length = int(value)
+                except (TypeError, ValueError):
+                    raise OTAError("Remote update has an invalid content length")
+                break
+        if content_length is not None:
+            if content_length < 0:
+                raise OTAError("Remote update has an invalid content length")
+            if content_length > max_bytes:
+                raise OTAError("Update bundle payload is too large")
+
+    stream = getattr(response, "raw", None)
+    read = getattr(stream, "read", None)
+    if read is None:
+        raise OTAError("Remote update response cannot be read safely")
+
+    body = bytearray()
+    while True:
+        # The extra byte detects overflow without asking the HTTP stream for
+        # an unbounded body or allowing it to allocate the whole response.
+        chunk = read(min(512, max_bytes - len(body) + 1))
+        if not chunk:
+            break
+        if isinstance(chunk, str):
+            chunk = chunk.encode("utf-8")
+        if not isinstance(chunk, (bytes, bytearray)):
+            raise OTAError("Remote update response returned invalid data")
+        body.extend(chunk)
+        if len(body) > max_bytes:
+            raise OTAError("Update bundle payload is too large")
+
+    if content_length is not None and len(body) != content_length:
+        raise OTAError("Remote update response ended before its content length")
+    try:
+        return body.decode("utf-8")
+    except UnicodeError as exc:
+        raise OTAError("Remote update response is not valid UTF-8: {}".format(exc))
 
 
 def _json_body_size(body):

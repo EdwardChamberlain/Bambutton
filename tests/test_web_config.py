@@ -365,3 +365,44 @@ def test_update_routes_stage_and_commit_without_touching_config(tmp_path):
     assert server.restart_requested is True
     assert json.loads(body)["pending"]["candidate"] == "app_a"
     assert json.loads(config_path.read_text()) == base_config()
+
+
+def test_upload_request_body_limit_is_enforced_before_reading_body():
+    header = (
+        "POST /api/update/upload HTTP/1.1\r\n"
+        "Content-Length: {}\r\n\r\n"
+    ).format(ota_manager.MAX_BUNDLE_BODY_BYTES + 1).encode("ascii")
+
+    class Client:
+        def __init__(self):
+            self.sent_header = False
+
+        def recv(self, _size):
+            if not self.sent_header:
+                self.sent_header = True
+                return header
+            raise AssertionError("upload body should not be read")
+
+    with pytest.raises(ValueError, match="Request body is too large"):
+        web_config._read_request(Client())
+
+
+def test_upload_request_accepts_a_body_within_the_ota_limit():
+    body = b"{}"
+    request = (
+        b"POST /api/update/upload HTTP/1.1\r\n"
+        b"Content-Length: 2\r\n\r\n{}"
+    )
+
+    class Client:
+        def __init__(self):
+            self.request = request
+
+        def recv(self, size):
+            chunk, self.request = self.request[:size], self.request[size:]
+            return chunk
+
+    method, path, parsed_body, headers = web_config._read_request(Client())
+
+    assert (method, path, parsed_body) == ("POST", "/api/update/upload", "{}")
+    assert headers["content-length"] == str(len(body))
