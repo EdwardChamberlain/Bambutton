@@ -82,6 +82,26 @@ class BambuddyAPI(API):
     def clear_plate(self, printer_id):
         return self._post(f"printers/{printer_id}/clear-plate")
 
+    def clear_plate_with_reconciliation(self, printer_id):
+        """Keep a failed clear pending unless printer status proves it landed."""
+        try:
+            self.clear_plate(printer_id)
+            return {"resolved": True, "status": None, "request_error": None}
+        except Exception as request_error:
+            status = self.get_printer_status(printer_id)
+            if (
+                not isinstance(status, dict)
+                or not isinstance(status.get("awaiting_plate_clear"), bool)
+            ):
+                raise BambuddyAPIError(
+                    "Could not verify plate-clear request outcome"
+                )
+            return {
+                "resolved": not status["awaiting_plate_clear"],
+                "status": status,
+                "request_error": request_error,
+            }
+
     def chamber_light_is_lit(self, printer_id):
         status = self.get_printer_status(printer_id)
         return status.get("chamber_light", False)

@@ -15,9 +15,13 @@ config = config_loader.load_config()
 # -- Runtime Flags ---
 PRINTER_AWAITING_PLATE_CLEAR = False
 PENDING_BUTTON_PRESS = False
+BUTTON_PRESS_NEEDS_RECONCILIATION = False
+BUTTON_PRESS_RETRY_AT_MS = None
 CHAMBER_LIGHT_IS_ON = True
 PRINTER_STATUS_UPDATE_REQUIRED = True
 network = None
+BUTTON_PRESS_RETRY_DELAY_MS = 5_000
+AP_RETRY_INTERVAL_MS = wifi.AP_RETRY_INTERVAL_SECONDS * 1000
 
 
 def should_flash_connection_failure():
@@ -27,7 +31,7 @@ def should_flash_connection_failure():
 
 
 def should_flash_plate_clear():
-    return PRINTER_AWAITING_PLATE_CLEAR and not PENDING_BUTTON_PRESS
+    return PRINTER_AWAITING_PLATE_CLEAR or PENDING_BUTTON_PRESS
 
 
 # Feed this from the main loop and during each bounded Wi-Fi attempt/backoff.
@@ -49,12 +53,14 @@ flasher.start()
 def IRQ_button_press(pin):
     global PENDING_BUTTON_PRESS
     global PRINTER_AWAITING_PLATE_CLEAR
+    global BUTTON_PRESS_NEEDS_RECONCILIATION, BUTTON_PRESS_RETRY_AT_MS
 
-    # This runs in the hardware interrupt. Keep it allocation-free so the LED
-    # stops flashing even while a status request is still timing out.
+    # Keep the interrupt allocation-free and retain one intent until confirmed.
     if PRINTER_AWAITING_PLATE_CLEAR:
         PRINTER_AWAITING_PLATE_CLEAR = False
         PENDING_BUTTON_PRESS = True
+        BUTTON_PRESS_NEEDS_RECONCILIATION = False
+        BUTTON_PRESS_RETRY_AT_MS = None
 
 
 button = gpio_button.GPIOButton(
@@ -87,6 +93,7 @@ else:
 if network.is_ap_mode():
     print("Wi-Fi unavailable; connect to the setup access point to update settings")
     flasher.on()
+last_ap_retry_ms = time.ticks_ms()
 
 # -- Initialize API client --
 api = bambuddy_api.BambuddyAPI(
@@ -121,28 +128,75 @@ def with_network_connection(request):
 
 
 def handle_pending_button_press():
-    global PENDING_BUTTON_PRESS
-    global PRINTER_STATUS_UPDATE_REQUIRED
+    global PENDING_BUTTON_PRESS, BUTTON_PRESS_NEEDS_RECONCILIATION
+    global BUTTON_PRESS_RETRY_AT_MS
+    global PRINTER_AWAITING_PLATE_CLEAR, PRINTER_STATUS_UPDATE_REQUIRED
+
+    if not PENDING_BUTTON_PRESS:
+        return
+    if (
+        BUTTON_PRESS_RETRY_AT_MS is not None
+        and time.ticks_diff(BUTTON_PRESS_RETRY_AT_MS, time.ticks_ms()) > 0
+    ):
+        return
 
     if not printer_api_ready:
         PENDING_BUTTON_PRESS = False
         return
 
     try:
-        with_network_connection(
-            lambda: api.clear_plate(config["printer"]["id"])
+        if BUTTON_PRESS_NEEDS_RECONCILIATION:
+            response = with_network_connection(
+                lambda: api.get_printer_status(config["printer"]["id"])
+            )
+            apply_printer_status(response)
+            BUTTON_PRESS_NEEDS_RECONCILIATION = False
+            if not PENDING_BUTTON_PRESS:
+                return
+
+        outcome = with_network_connection(
+            lambda: api.clear_plate_with_reconciliation(config["printer"]["id"])
         )
-        PRINTER_STATUS_UPDATE_REQUIRED = True
+        if outcome["status"] is not None:
+            apply_printer_status(outcome["status"])
+        if outcome["resolved"]:
+            PENDING_BUTTON_PRESS = False
+            PRINTER_AWAITING_PLATE_CLEAR = False
+            BUTTON_PRESS_NEEDS_RECONCILIATION = False
+            BUTTON_PRESS_RETRY_AT_MS = None
+            PRINTER_STATUS_UPDATE_REQUIRED = outcome["status"] is None
+            return
+
+        print("Plate-clear request was not applied:", outcome["request_error"])
+        BUTTON_PRESS_RETRY_AT_MS = time.ticks_add(
+            time.ticks_ms(), BUTTON_PRESS_RETRY_DELAY_MS
+        )
 
     except Exception as exc:
         print("Failed to send plate clear request:", exc)
+        BUTTON_PRESS_NEEDS_RECONCILIATION = True
+        BUTTON_PRESS_RETRY_AT_MS = time.ticks_add(
+            time.ticks_ms(), BUTTON_PRESS_RETRY_DELAY_MS
+        )
+        PRINTER_STATUS_UPDATE_REQUIRED = True
 
-    PENDING_BUTTON_PRESS = False
+
+def apply_printer_status(response):
+    global PRINTER_AWAITING_PLATE_CLEAR, CHAMBER_LIGHT_IS_ON
+    global PENDING_BUTTON_PRESS, BUTTON_PRESS_NEEDS_RECONCILIATION
+
+    PRINTER_AWAITING_PLATE_CLEAR = response["awaiting_plate_clear"]
+    CHAMBER_LIGHT_IS_ON = response["chamber_light"]
+    if PENDING_BUTTON_PRESS:
+        if PRINTER_AWAITING_PLATE_CLEAR:
+            BUTTON_PRESS_NEEDS_RECONCILIATION = False
+        else:
+            PENDING_BUTTON_PRESS = False
+            BUTTON_PRESS_NEEDS_RECONCILIATION = False
 
 
 def handle_printer_status_update():
-    global PRINTER_AWAITING_PLATE_CLEAR, PRINTER_STATUS_UPDATE_REQUIRED
-    global CHAMBER_LIGHT_IS_ON
+    global PRINTER_STATUS_UPDATE_REQUIRED
 
     if not printer_api_ready:
         PRINTER_STATUS_UPDATE_REQUIRED = False
@@ -152,8 +206,7 @@ def handle_printer_status_update():
         response = with_network_connection(
             lambda: api.get_printer_status(config["printer"]["id"])
         )
-        PRINTER_AWAITING_PLATE_CLEAR = response["awaiting_plate_clear"]
-        CHAMBER_LIGHT_IS_ON = response["chamber_light"]
+        apply_printer_status(response)
 
         print(
             "Printer awaiting plate clear:",
@@ -211,6 +264,14 @@ while True:
     watchdog.feed()
 
     restart_requested = web_server is not None and web_server.poll()
+
+    if (
+        network.is_ap_mode()
+        and time.ticks_diff(time.ticks_ms(), last_ap_retry_ms)
+        >= AP_RETRY_INTERVAL_MS
+    ):
+        network.retry_station_from_access_point(watchdog_feed=watchdog.feed)
+        last_ap_retry_ms = time.ticks_ms()
 
     # Push button press to API if pending
     if not restart_requested and not network.is_ap_mode() and PENDING_BUTTON_PRESS:
