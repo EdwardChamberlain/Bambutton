@@ -83,10 +83,10 @@ network = wifi.WiFi(
     timeout_seconds=config["wifi"]["timeout_seconds"],
 )
 network.connect_with_fallback(watchdog_feed=watchdog.feed)
-last_ap_retry_ms = time.ticks_ms()
 if network.is_ap_mode():
     print("Wi-Fi unavailable; connect to the setup access point to update settings")
     flasher.on()
+last_ap_retry_ms = time.ticks_ms()
 
 # -- Initialize API client --
 api = bambuddy_api.BambuddyAPI(

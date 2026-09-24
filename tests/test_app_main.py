@@ -142,7 +142,10 @@ def load_app_main(monkeypatch, api, advance_to_ap_retry=False, recover_wifi=True
         "machine": SimpleNamespace(WDT=FakeWDT, reset=lambda: None),
         "time": fake_time,
         "bambuddy_api": SimpleNamespace(BambuddyAPI=lambda *args: api),
-        "config_loader": SimpleNamespace(load_config=lambda: config),
+        "config_loader": SimpleNamespace(
+            load_config=lambda: config,
+            is_runtime_config_ready=lambda loaded: True,
+        ),
         "gpio_button": SimpleNamespace(GPIOButton=FakeButton),
         "led_flasher": SimpleNamespace(LedFlasher=FakeFlasher),
         "ota_manager": SimpleNamespace(OTAUpdateManager=FakeOTA),
