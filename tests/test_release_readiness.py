@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import json
 import runpy
@@ -28,6 +29,25 @@ def passing_record():
         },
         "checks": {name: True for name in verify_release_readiness.REQUIRED_CHECKS},
     }
+
+
+def valid_ota_bundle_bytes():
+    from micro import ota_manager
+
+    files = {}
+    for filename in ota_manager.APP_FILES:
+        content = (filename + "\n").encode("utf-8")
+        files[filename] = {
+            "size": len(content),
+            "sha256": hashlib.sha256(content).hexdigest(),
+            "content": base64.b64encode(content).decode("ascii"),
+        }
+    return json.dumps({
+        "format": ota_manager.UPDATE_FORMAT,
+        "version": "1.0.0",
+        "minimum_bootloader": ota_manager.BOOTLOADER_VERSION,
+        "files": files,
+    }).encode("utf-8")
 
 
 def test_release_record_must_match_tag_and_pass_every_check():
@@ -122,7 +142,7 @@ def test_release_artifacts_must_match_tested_sha256_digests(tmp_path):
     contents = {
         "Bambutton-windows.zip": b"windows candidate",
         "Bambutton-macos.zip": b"macOS candidate",
-        "bambutton-ota.json": b"OTA candidate",
+        "bambutton-ota.json": valid_ota_bundle_bytes(),
     }
     record = {"artifacts": {}}
     for name, content in contents.items():
@@ -160,3 +180,25 @@ def test_release_artifact_verifier_reports_missing_candidate_file(tmp_path):
 
     assert len(errors) == len(verify_release_artifacts.ARTIFACTS)
     assert all("release candidate artifact is missing" in error for error in errors)
+
+
+def test_release_artifact_verifier_validates_ota_bundle_even_with_matching_digest(
+    tmp_path,
+):
+    artifacts = tmp_path / "artifacts"
+    artifacts.mkdir()
+    (artifacts / "Bambutton-windows.zip").write_bytes(b"windows candidate")
+    (artifacts / "Bambutton-macos.zip").write_bytes(b"macOS candidate")
+    (artifacts / "bambutton-ota.json").write_bytes(b"not an OTA bundle")
+    record = {
+        "artifacts": {
+            "windows_setup_tool_sha256": hashlib.sha256(b"windows candidate").hexdigest(),
+            "macos_setup_tool_sha256": hashlib.sha256(b"macOS candidate").hexdigest(),
+            "ota_bundle_sha256": hashlib.sha256(b"not an OTA bundle").hexdigest(),
+        },
+    }
+
+    errors = verify_release_artifacts.release_artifact_errors(record, artifacts)
+
+    assert len(errors) == 1
+    assert errors[0].startswith("OTA bundle is invalid for the device:")

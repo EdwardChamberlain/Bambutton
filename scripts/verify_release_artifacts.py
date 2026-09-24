@@ -5,6 +5,14 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import sys
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from micro import ota_manager  # noqa: E402
 
 
 ARTIFACTS = {
@@ -34,6 +42,24 @@ def release_artifact_errors(record, artifact_dir):
             continue
         if actual.lower() != expected.lower():
             errors.append("release candidate artifact digest does not match: {}".format(filename))
+
+    ota_path = artifact_dir / ARTIFACTS["ota_bundle_sha256"]
+    try:
+        ota_body = ota_path.read_bytes()
+    except OSError:
+        ota_body = None
+    if ota_body is not None:
+        max_bytes = getattr(ota_manager, "MAX_BUNDLE_BODY_BYTES", 96 * 1024)
+        if len(ota_body) > max_bytes:
+            errors.append(
+                "OTA bundle exceeds the {} byte device payload limit".format(max_bytes)
+            )
+        else:
+            try:
+                bundle = json.loads(ota_body.decode("utf-8"))
+                ota_manager.validate_bundle(bundle)
+            except (UnicodeError, ValueError, ota_manager.OTAError) as exc:
+                errors.append("OTA bundle is invalid for the device: {}".format(exc))
     return errors
 
 

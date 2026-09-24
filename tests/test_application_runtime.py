@@ -18,6 +18,10 @@ class FakeAPI:
     def clear_plate(self, printer_id):
         self.clears += 1
 
+    def clear_plate_with_reconciliation(self, printer_id):
+        self.clears += 1
+        return {"resolved": True, "status": None, "request_error": None}
+
     def get_printer_status(self, printer_id):
         return self.status
 
@@ -109,7 +113,10 @@ def load_app_main(monkeypatch, api):
             sleep_ms=lambda delay: (_ for _ in ()).throw(StopMainLoop()),
         ),
         "bambuddy_api": SimpleNamespace(BambuddyAPI=lambda *args: api),
-        "config_loader": SimpleNamespace(load_config=lambda: config),
+        "config_loader": SimpleNamespace(
+            load_config=lambda: config,
+            is_runtime_config_ready=lambda loaded: True,
+        ),
         "gpio_button": SimpleNamespace(GPIOButton=FakeButton),
         "led_flasher": SimpleNamespace(LedFlasher=FakeFlasher),
         "ota_manager": SimpleNamespace(OTAUpdateManager=FakeOTA),
