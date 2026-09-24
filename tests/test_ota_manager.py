@@ -233,3 +233,36 @@ def test_remote_check_uses_https_and_same_staging_pipeline(tmp_path):
 
     with pytest.raises(ota_manager.OTAError, match="HTTPS"):
         manager.check_remote("http://updates.example.test/bambutton-ota.json")
+
+
+def test_remote_check_rejects_oversized_json_before_parsing(tmp_path):
+    class Response:
+        status_code = 200
+        text = " " * (ota_manager.MAX_BUNDLE_BODY_BYTES + 1)
+
+        def close(self):
+            self.closed = True
+
+    response = Response()
+    manager = ota_manager.OTAUpdateManager(
+        root=str(tmp_path), request_get=lambda url: response
+    )
+
+    with pytest.raises(ota_manager.OTAError, match="payload is too large"):
+        manager.check_remote()
+
+    assert response.closed is True
+
+
+def test_stage_bundle_checks_free_space_before_writing_candidate(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        ota_manager.os,
+        "statvfs",
+        lambda path: (4096, 4096, 100, 1, 1, 0, 0, 0, 0, 0),
+    )
+    manager = ota_manager.OTAUpdateManager(root=str(tmp_path))
+
+    with pytest.raises(ota_manager.OTAError, match="Not enough free space"):
+        manager.stage_bundle(bundle())
+
+    assert not (tmp_path / ".bambutton/app_a.tmp/app_main.py").exists()

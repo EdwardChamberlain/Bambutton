@@ -63,8 +63,11 @@ REMOTE_BUNDLE_URL = (
     "https://github.com/EdwardChamberlain/Bambutton/releases/latest/"
     "download/bambutton-ota.json"
 )
-MAX_FILE_BYTES = 32 * 1024
+MAX_FILE_BYTES = 40 * 1024
 MAX_BUNDLE_BYTES = 128 * 1024
+# Keep the downloaded JSON below the web server's 128 KiB request-body ceiling.
+MAX_BUNDLE_BODY_BYTES = 96 * 1024
+OTA_STAGING_OVERHEAD_BYTES = 48 * 1024
 
 
 class OTAError(Exception):
@@ -125,6 +128,8 @@ class OTAUpdateManager:
                 close = getattr(response, "close", None)
                 if close:
                     close()
+            if _json_body_size(body) > MAX_BUNDLE_BODY_BYTES:
+                raise OTAError("Update bundle payload is too large")
             bundle = _parse_json_body(body)
             self.stage_bundle(bundle)
             return self.status()
@@ -143,6 +148,8 @@ class OTAUpdateManager:
             temporary = self._slot_path(target + ".tmp")
 
             self._remove_tree(temporary)
+            total_size = sum(info["size"] for info in normalized["files"].values())
+            self._ensure_staging_space(total_size + OTA_STAGING_OVERHEAD_BYTES)
             self._ensure_directory(temporary)
             try:
                 for filename, file_info in normalized["files"].items():
@@ -430,6 +437,23 @@ class OTAUpdateManager:
             return True
         except OSError:
             return False
+
+    def _ensure_staging_space(self, required_bytes):
+        statvfs = getattr(os, "statvfs", None)
+        if statvfs is None:
+            raise OTAError("Could not verify OTA staging space")
+        try:
+            filesystem = statvfs(self.root)
+            available_bytes = filesystem[0] * filesystem[3]
+        except Exception as exc:
+            raise OTAError("Could not verify OTA staging space: {}".format(exc))
+        if available_bytes < required_bytes:
+            raise OTAError(
+                "Not enough free space to stage the update "
+                "({} bytes available, {} required)".format(
+                    available_bytes, required_bytes
+                )
+            )
 
     def _files_equal(self, path_a, path_b):
         try:
@@ -744,6 +768,26 @@ def _parse_json_body(body):
         return json.loads(body)
     except (TypeError, ValueError) as exc:
         raise OTAError("Remote update did not return valid JSON: {}".format(exc))
+
+
+def _json_body_size(body):
+    if isinstance(body, bytes):
+        return len(body)
+    if not isinstance(body, str):
+        return MAX_BUNDLE_BODY_BYTES + 1
+
+    size = 0
+    for character in body:
+        codepoint = ord(character)
+        size += (
+            1 if codepoint < 0x80 else
+            2 if codepoint < 0x800 else
+            3 if codepoint < 0x10000 else
+            4
+        )
+        if size > MAX_BUNDLE_BODY_BYTES:
+            return size
+    return size
 
 
 def _request_get(url):

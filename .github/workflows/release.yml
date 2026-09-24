@@ -122,6 +122,9 @@ jobs:
             --version "${GITHUB_REF_NAME#v}" \
             --output dist/bambutton-ota.json
 
+      - name: Validate OTA bundle with device rules
+        run: python scripts/validate_ota_bundle.py dist/bambutton-ota.json
+
       - name: Upload OTA artifact
         uses: actions/upload-artifact@v4
         with:
