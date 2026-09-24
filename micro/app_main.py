@@ -190,27 +190,35 @@ except Exception as exc:
     web_server = None
     print("Web configuration server unavailable:", exc)
 
-# A candidate slot is not considered active until the application has
-# initialized its network and web services successfully.
-if web_server is not None:
-    update_manager.confirm_boot()
-
-
 # -- Main loop --
+boot_confirmed = False
 while True:
     watchdog.feed()
 
-    if web_server is not None and web_server.poll():
-        print("Restart requested")
-        time.sleep_ms(100)
-        machine.reset()
+    restart_requested = web_server is not None and web_server.poll()
 
     # Push button press to API if pending
-    if not network.is_ap_mode() and PENDING_BUTTON_PRESS:
+    if not restart_requested and not network.is_ap_mode() and PENDING_BUTTON_PRESS:
         handle_pending_button_press()
 
     # Check printer status
-    if not network.is_ap_mode() and PRINTER_STATUS_UPDATE_REQUIRED:
+    if (
+        not restart_requested
+        and not network.is_ap_mode()
+        and PRINTER_STATUS_UPDATE_REQUIRED
+    ):
         handle_printer_status_update()
+
+    # Confirm only after services have initialized and the first complete main
+    # loop pass has run. An early runtime exception or watchdog reset remains
+    # eligible for bootloader rollback.
+    if web_server is not None and not boot_confirmed:
+        update_manager.confirm_boot()
+        boot_confirmed = True
+
+    if restart_requested:
+        print("Restart requested")
+        time.sleep_ms(100)
+        machine.reset()
 
     time.sleep_ms(25)

@@ -8,12 +8,15 @@ from micro import ota_manager
 
 
 def bundle(version="1.2.3", files=None):
-    files = files or {
-        "app_main.py": b"print('new app')\n",
-        "web_config.py": b"WEB_VERSION = 'new'\n",
+    complete_files = {
+        name: (name + "\n").encode()
+        for name in ota_manager.APP_FILES
     }
+    complete_files["app_main.py"] = b"print('new app')\n"
+    complete_files["web_config.py"] = b"WEB_VERSION = 'new'\n"
+    complete_files.update(files or {})
     encoded = {}
-    for name, content in files.items():
+    for name, content in complete_files.items():
         encoded[name] = {
             "size": len(content),
             "sha256": hashlib.sha256(content).hexdigest(),

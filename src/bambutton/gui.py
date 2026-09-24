@@ -111,10 +111,18 @@ def write_install_marker():
 
 
 required = (
+    ".bambutton/bootstrap/api.py",
     ".bambutton/bootstrap/app_main.py",
+    ".bambutton/bootstrap/bambuddy_api.py",
+    ".bambutton/bootstrap/config_loader.py",
+    ".bambutton/bootstrap/gpio_button.py",
+    ".bambutton/bootstrap/led_flasher.py",
+    ".bambutton/bootstrap/periodic_timer.py",
     ".bambutton/bootstrap/ota_manager.py",
     ".bambutton/bootstrap/web_config.py",
+    ".bambutton/bootstrap/wifi.py",
     ".bambutton/bootstrap/boot.py",
+    ".bambutton/bootstrap/main.py",
 )
 for path in required:
     if not exists(path):
@@ -142,21 +150,26 @@ if not recoverable_install:
 if exists("ota_manager.py") and not exists("boot.py") and not has_ota_state:
     os.remove("ota_manager.py")
 
-# An existing main.py is the legacy application. Leave it untouched and let
-# boot.py run the migrated slot before MicroPython reaches main.py.
+# Install the new manager while preserving an existing flat-root main.py.
 if not exists("ota_manager.py"):
     os.rename(".bambutton/bootstrap/ota_manager.py", "ota_manager.py")
-
-if not exists("main.py"):
-    os.rename(".bambutton/bootstrap/main.py", "main.py")
 
 if not exists("config.json") and exists(".bambutton/bootstrap/config.json"):
     os.rename(".bambutton/bootstrap/config.json", "config.json")
 
-# boot.py is normally absent on a legacy installation. If it is already
-# present, it is retained so an interrupted retry cannot overwrite it.
+# Install the short boot recovery hook before changing main.py. If power fails
+# during the handoff, boot.py completes it and then exits into main.py.
 if not exists("boot.py"):
     os.rename(".bambutton/bootstrap/boot.py", "boot.py")
+
+# Preserve the old flat-root entrypoint for migration rollback. Existing OTA
+# installations already have the stable loader and must keep it.
+if not has_ota_state:
+    legacy_main = ".bambutton/legacy_main.py"
+    if exists("main.py") and not exists(legacy_main):
+        os.rename("main.py", legacy_main)
+    if not exists("main.py"):
+        os.rename(".bambutton/bootstrap/main.py", "main.py")
 """
 
 

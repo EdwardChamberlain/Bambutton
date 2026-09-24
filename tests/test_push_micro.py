@@ -55,10 +55,23 @@ def test_push_micro_no_main_keeps_development_path_without_boot(tmp_path, monkey
     assert all("boot.py" not in " ".join(call) for call in calls)
 
 
-def test_bootstrap_commit_preserves_legacy_main_until_boot_hook_is_ready(tmp_path, monkeypatch):
+def test_bootstrap_commit_hands_off_legacy_main_to_stable_loader(tmp_path, monkeypatch):
     bootstrap = tmp_path / ".bambutton/bootstrap"
     bootstrap.mkdir(parents=True)
-    for filename in ("app_main.py", "boot.py", "ota_manager.py", "web_config.py"):
+    for filename in (
+        "api.py",
+        "app_main.py",
+        "bambuddy_api.py",
+        "boot.py",
+        "config_loader.py",
+        "gpio_button.py",
+        "led_flasher.py",
+        "main.py",
+        "ota_manager.py",
+        "periodic_timer.py",
+        "web_config.py",
+        "wifi.py",
+    ):
         (bootstrap / filename).write_text(filename)
     legacy_main = tmp_path / "main.py"
     legacy_main.write_text("legacy application")
@@ -66,7 +79,9 @@ def test_bootstrap_commit_preserves_legacy_main_until_boot_hook_is_ready(tmp_pat
     monkeypatch.chdir(tmp_path)
     exec(push_micro.BOOTSTRAP_COMMIT_CODE, {})
 
-    assert legacy_main.read_text() == "legacy application"
+    assert not legacy_main.exists()
+    assert (tmp_path / ".bambutton/legacy_main.py").read_text() == "legacy application"
+    assert (tmp_path / "main.py").read_text() == "main.py"
     assert (tmp_path / "boot.py").read_text() == "boot.py"
     assert (tmp_path / "ota_manager.py").read_text() == "ota_manager.py"
 
@@ -74,7 +89,20 @@ def test_bootstrap_commit_preserves_legacy_main_until_boot_hook_is_ready(tmp_pat
 def test_bootstrap_commit_recovers_after_manager_was_installed_first(tmp_path, monkeypatch):
     bootstrap = tmp_path / ".bambutton/bootstrap"
     bootstrap.mkdir(parents=True)
-    for filename in ("app_main.py", "boot.py", "ota_manager.py", "web_config.py"):
+    for filename in (
+        "api.py",
+        "app_main.py",
+        "bambuddy_api.py",
+        "boot.py",
+        "config_loader.py",
+        "gpio_button.py",
+        "led_flasher.py",
+        "main.py",
+        "ota_manager.py",
+        "periodic_timer.py",
+        "web_config.py",
+        "wifi.py",
+    ):
         (bootstrap / filename).write_text("new " + filename)
     (tmp_path / "main.py").write_text("legacy application")
     (tmp_path / "ota_manager.py").write_text("partial manager")
@@ -95,7 +123,8 @@ def test_bootstrap_commit_recovers_after_manager_was_installed_first(tmp_path, m
 
     assert (tmp_path / "ota_manager.py").read_text() == "new ota_manager.py"
     assert (tmp_path / "boot.py").read_text() == "new boot.py"
-    assert (tmp_path / "main.py").read_text() == "legacy application"
+    assert (tmp_path / "main.py").read_text() == "new main.py"
+    assert (tmp_path / ".bambutton/legacy_main.py").read_text() == "legacy application"
     assert marker_writes == []
     assert (tmp_path / ".bambutton/bootstrap-install.marker").read_text() == (
         "bambutton-bootstrap-v1\n"

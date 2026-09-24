@@ -48,7 +48,7 @@ APP_FILES = (
     "web_config.py",
     "wifi.py",
 )
-REQUIRED_APP_FILES = ("app_main.py", "web_config.py")
+REQUIRED_APP_FILES = APP_FILES
 UPDATE_ROOT = ".bambutton"
 BOOTSTRAP_ROOT = UPDATE_ROOT + "/bootstrap"
 BOOTSTRAP_INSTALL_MARKER = UPDATE_ROOT + "/bootstrap-install.marker"
@@ -343,11 +343,10 @@ class OTAUpdateManager:
             return self._launch_legacy()
 
         slot_path = self._slot_path(slot)
-        if not self._read_json(self._slot_path(slot, "manifest.json")):
-            raise OTAError("Active application slot is incomplete")
-        if slot_path not in sys.path:
-            sys.path.insert(0, slot_path)
         try:
+            self._verify_slot(slot)
+            if slot_path not in sys.path:
+                sys.path.insert(0, slot_path)
             return __import__("app_main")
         except Exception:
             pending = self._read_pending()
@@ -356,8 +355,36 @@ class OTAUpdateManager:
                 self._reset_after_recovery()
             raise
 
+    def _verify_slot(self, slot):
+        manifest = self._read_json(self._slot_path(slot, "manifest.json"))
+        if not isinstance(manifest, dict):
+            raise OTAError("Active application slot is incomplete")
+        files = manifest.get("files")
+        if (
+            not isinstance(files, dict)
+            or len(files) != len(REQUIRED_APP_FILES)
+            or any(filename not in files for filename in REQUIRED_APP_FILES)
+        ):
+            raise OTAError("Active application slot is incomplete")
+
+        for filename in REQUIRED_APP_FILES:
+            info = files.get(filename)
+            if not isinstance(info, dict):
+                raise OTAError("Invalid manifest entry for {}".format(filename))
+            path = self._safe_join(self._slot_path(slot), filename)
+            self._verify_file(path, info)
+
     def _launch_legacy(self):
         active = self._read_active()
+        legacy_main = self.root + "/" + UPDATE_ROOT + "/legacy_main.py"
+        if (
+            (active and active.get("legacy_entry") == "legacy_main")
+            or (active is None and self._path_exists(legacy_main))
+        ):
+            legacy_path = self._full_path(UPDATE_ROOT)
+            if legacy_path not in sys.path:
+                sys.path.insert(0, legacy_path)
+            return __import__("legacy_main")
         if active and active.get("legacy_entry") == "main":
             return __import__("main")
         return __import__("app_main")
@@ -368,6 +395,9 @@ class OTAUpdateManager:
         raise OTAError("Application rollback requested")
 
     def _legacy_entry_for_migration(self, source_root):
+        if self._path_exists(self.root + "/" + UPDATE_ROOT + "/legacy_main.py"):
+            return "legacy_main"
+
         if source_root == self.root:
             if self._path_exists(self.root + "/app_main.py"):
                 return "app_main"
@@ -530,7 +560,7 @@ class OTAUpdateManager:
         value = {"slot": slot}
         if legacy:
             value["legacy"] = True
-        if legacy_entry in ("main", "app_main"):
+        if legacy_entry in ("main", "app_main", "legacy_main"):
             value["legacy_entry"] = legacy_entry
         self._write_state_record(ACTIVE_RECORDS, value)
 

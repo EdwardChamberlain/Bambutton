@@ -281,10 +281,10 @@ def test_config_page_preserves_printer_selection_when_loading_printers():
 
 def update_bundle():
     files = {}
-    for name, content in {
-        "app_main.py": b"print('updated')\n",
-        "web_config.py": b"WEB = True\n",
-    }.items():
+    contents = {name: (name + "\n").encode() for name in ota_manager.APP_FILES}
+    contents["app_main.py"] = b"print('updated')\n"
+    contents["web_config.py"] = b"WEB = True\n"
+    for name, content in contents.items():
         files[name] = {
             "size": len(content),
             "sha256": hashlib.sha256(content).hexdigest(),
