@@ -63,8 +63,11 @@ REMOTE_BUNDLE_URL = (
     "https://github.com/EdwardChamberlain/Bambutton/releases/latest/"
     "download/bambutton-ota.json"
 )
-MAX_FILE_BYTES = 32 * 1024
+MAX_FILE_BYTES = 40 * 1024
 MAX_BUNDLE_BYTES = 128 * 1024
+# Keep the downloaded JSON below the web server's 128 KiB request-body ceiling.
+MAX_BUNDLE_BODY_BYTES = 96 * 1024
+OTA_STAGING_OVERHEAD_BYTES = 48 * 1024
 
 
 class OTAError(Exception):
@@ -120,7 +123,10 @@ class OTAUpdateManager:
                 status_code = getattr(response, "status_code", 200)
                 if status_code < 200 or status_code >= 300:
                     raise OTAError("Remote update returned HTTP {}".format(status_code))
-                body = response.text
+                body = _read_response_body_limited(
+                    response,
+                    MAX_BUNDLE_BODY_BYTES,
+                )
             finally:
                 close = getattr(response, "close", None)
                 if close:
@@ -143,6 +149,8 @@ class OTAUpdateManager:
             temporary = self._slot_path(target + ".tmp")
 
             self._remove_tree(temporary)
+            total_size = sum(info["size"] for info in normalized["files"].values())
+            self._ensure_staging_space(total_size + OTA_STAGING_OVERHEAD_BYTES)
             self._ensure_directory(temporary)
             try:
                 for filename, file_info in normalized["files"].items():
@@ -430,6 +438,25 @@ class OTAUpdateManager:
             return True
         except OSError:
             return False
+
+    def _ensure_staging_space(self, required_bytes):
+        statvfs = getattr(os, "statvfs", None)
+        if statvfs is None:
+            raise OTAError("Could not verify OTA staging space")
+        try:
+            filesystem = statvfs(self.root)
+            # MicroPython's statvfs tuple uses f_frsize for free-space
+            # accounting and f_bavail for blocks available to this process.
+            available_bytes = filesystem[1] * filesystem[4]
+        except Exception as exc:
+            raise OTAError("Could not verify OTA staging space: {}".format(exc))
+        if available_bytes < required_bytes:
+            raise OTAError(
+                "Not enough free space to stage the update "
+                "({} bytes available, {} required)".format(
+                    available_bytes, required_bytes
+                )
+            )
 
     def _files_equal(self, path_a, path_b):
         try:
@@ -744,6 +771,72 @@ def _parse_json_body(body):
         return json.loads(body)
     except (TypeError, ValueError) as exc:
         raise OTAError("Remote update did not return valid JSON: {}".format(exc))
+
+
+def _read_response_body_limited(response, max_bytes):
+    """Read a response incrementally so an oversized body is never buffered."""
+    headers = getattr(response, "headers", None)
+    content_length = None
+    if headers:
+        for name, value in headers.items():
+            if str(name).lower() == "content-length":
+                try:
+                    content_length = int(value)
+                except (TypeError, ValueError):
+                    raise OTAError("Remote update has an invalid content length")
+                break
+        if content_length is not None:
+            if content_length < 0:
+                raise OTAError("Remote update has an invalid content length")
+            if content_length > max_bytes:
+                raise OTAError("Update bundle payload is too large")
+
+    stream = getattr(response, "raw", None)
+    read = getattr(stream, "read", None)
+    if read is None:
+        raise OTAError("Remote update response cannot be read safely")
+
+    body = bytearray()
+    while True:
+        # The extra byte detects overflow without asking the HTTP stream for
+        # an unbounded body or allowing it to allocate the whole response.
+        chunk = read(min(512, max_bytes - len(body) + 1))
+        if not chunk:
+            break
+        if isinstance(chunk, str):
+            chunk = chunk.encode("utf-8")
+        if not isinstance(chunk, (bytes, bytearray)):
+            raise OTAError("Remote update response returned invalid data")
+        body.extend(chunk)
+        if len(body) > max_bytes:
+            raise OTAError("Update bundle payload is too large")
+
+    if content_length is not None and len(body) != content_length:
+        raise OTAError("Remote update response ended before its content length")
+    try:
+        return body.decode("utf-8")
+    except UnicodeError as exc:
+        raise OTAError("Remote update response is not valid UTF-8: {}".format(exc))
+
+
+def _json_body_size(body):
+    if isinstance(body, bytes):
+        return len(body)
+    if not isinstance(body, str):
+        return MAX_BUNDLE_BODY_BYTES + 1
+
+    size = 0
+    for character in body:
+        codepoint = ord(character)
+        size += (
+            1 if codepoint < 0x80 else
+            2 if codepoint < 0x800 else
+            3 if codepoint < 0x10000 else
+            4
+        )
+        if size > MAX_BUNDLE_BODY_BYTES:
+            return size
+    return size
 
 
 def _request_get(url):
