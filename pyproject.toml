@@ -23,6 +23,7 @@ bambutton = "bambutton.gui:main"
 [project.optional-dependencies]
 dev = [
   "build",
+  "coverage>=7.6",
   "flake8",
   "hatch-vcs",
   "pyinstaller",
