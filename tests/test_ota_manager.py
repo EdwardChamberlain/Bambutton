@@ -296,7 +296,9 @@ def test_stage_bundle_checks_free_space_before_writing_candidate(tmp_path, monke
     monkeypatch.setattr(
         ota_manager.os,
         "statvfs",
-        lambda path: (4096, 4096, 100, 1, 1, 0, 0, 0, 0, 0),
+        # f_bsize/f_bfree would report plenty of space, but only f_frsize
+        # times f_bavail is actually available to the application.
+        lambda path: (4096, 512, 100, 100, 50, 0, 0, 0, 0, 0),
     )
     manager = ota_manager.OTAUpdateManager(root=str(tmp_path))
 

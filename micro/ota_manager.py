@@ -445,7 +445,9 @@ class OTAUpdateManager:
             raise OTAError("Could not verify OTA staging space")
         try:
             filesystem = statvfs(self.root)
-            available_bytes = filesystem[0] * filesystem[3]
+            # MicroPython's statvfs tuple uses f_frsize for free-space
+            # accounting and f_bavail for blocks available to this process.
+            available_bytes = filesystem[1] * filesystem[4]
         except Exception as exc:
             raise OTAError("Could not verify OTA staging space: {}".format(exc))
         if available_bytes < required_bytes:
