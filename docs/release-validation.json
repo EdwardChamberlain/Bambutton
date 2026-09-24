@@ -1,0 +1,19 @@
+{
+  "release_tag": null,
+  "tested_at_utc": null,
+  "tested_commit": null,
+  "board": null,
+  "micropython_firmware": null,
+  "result": "pending",
+  "checks": {
+    "fresh_usb_install": false,
+    "usb_upgrade_from_previous_release": false,
+    "settings_save_power_interruption_recovery": false,
+    "plate_clear_api_outage_recovery": false,
+    "web_ota_install": false,
+    "larger_ota_install_and_rollback": false,
+    "interrupted_ota_rollback": false,
+    "windows_setup_tool_used": false,
+    "macos_setup_tool_used": false
+  }
+}

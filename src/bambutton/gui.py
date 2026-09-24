@@ -174,6 +174,10 @@ if not has_ota_state:
 
 
 def main():
+    if "--self-test" in sys.argv[1:]:
+        run_installation_self_test()
+        return
+
     window = build_window()
 
     try:
@@ -192,6 +196,30 @@ def main():
                 handle_flash(window, values)
     finally:
         window.close()
+
+
+def run_installation_self_test():
+    required_files = (
+        "api.py",
+        "app_main.py",
+        "bambuddy_api.py",
+        "boot.py",
+        "config_loader.py",
+        "gpio_button.py",
+        "led_flasher.py",
+        "main.py",
+        "ota_manager.py",
+        "periodic_timer.py",
+        "web_config.py",
+        "wifi.py",
+        "config_example.json",
+    )
+    missing = [name for name in required_files if not (MICRO_DIR / name).is_file()]
+    if missing:
+        raise RuntimeError(
+            "Bambutton installation is missing: {}".format(", ".join(missing))
+        )
+    validate_firmware(first_firmware_file())
 
 
 def build_window():
