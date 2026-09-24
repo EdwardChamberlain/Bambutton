@@ -11,7 +11,8 @@ except ImportError:
     import base64 as _base64
 
 try:
-    import ota_manager, config_loader
+    import ota_manager
+    import config_loader
 except ImportError:
     from micro import ota_manager, config_loader
 
