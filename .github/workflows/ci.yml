@@ -45,6 +45,34 @@ jobs:
           coverage json --pretty-print -o coverage.json
           python scripts/check_coverage.py coverage.json
 
+      - name: Build and validate release OTA candidate
+        run: |
+          version="$(python -c 'import json; print(json.load(open("docs/release-validation.json"))["candidate_version"])')"
+          python scripts/build_ota_bundle.py \
+            --version "$version" \
+            --output candidate-assets/bambutton-ota.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          from micro import ota_manager
+
+          path = Path("candidate-assets/bambutton-ota.json")
+          raw = path.read_bytes()
+          max_bytes = getattr(ota_manager, "MAX_BUNDLE_BODY_BYTES", 96 * 1024)
+          if len(raw) > max_bytes:
+              raise SystemExit("OTA bundle is {} bytes; limit is {}".format(len(raw), max_bytes))
+          ota_manager.validate_bundle(json.loads(raw))
+          print("Validated OTA bundle: {} bytes".format(len(raw)))
+          PY
+
+      - name: Upload OTA release candidate
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-candidate-ota
+          path: candidate-assets/bambutton-ota.json
+
       - name: Build wheel and source distribution
         run: python -m build
 
@@ -104,6 +132,29 @@ jobs:
         shell: pwsh
         run: .\dist\Bambutton.exe --self-test
 
+      - name: Package Windows release candidate
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path dist/Bambutton.exe -DestinationPath dist/Bambutton-windows.zip -Force
+
+      - name: Upload Windows release candidate
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-candidate-windows
+          path: dist/Bambutton-windows.zip
+
       - name: Smoke-test macOS application
         if: runner.os == 'macOS'
         run: dist/Bambutton.app/Contents/MacOS/Bambutton --self-test
+
+      - name: Package macOS release candidate
+        if: runner.os == 'macOS'
+        run: ditto -c -k --keepParent dist/Bambutton.app dist/Bambutton-macos.zip
+
+      - name: Upload macOS release candidate
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-candidate-macos
+          path: dist/Bambutton-macos.zip

@@ -1,10 +1,16 @@
 {
+  "candidate_version": "1.0.0",
   "release_tag": null,
   "tested_at_utc": null,
   "tested_commit": null,
   "board": null,
   "micropython_firmware": null,
   "result": "pending",
+  "artifacts": {
+    "windows_setup_tool_sha256": null,
+    "macos_setup_tool_sha256": null,
+    "ota_bundle_sha256": null
+  },
   "checks": {
     "fresh_usb_install": false,
     "usb_upgrade_from_previous_release": false,

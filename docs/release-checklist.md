@@ -4,9 +4,13 @@ The release workflow runs CI against the tagged commit and refuses to publish
 unless the tag points at the current `main` commit and
 [`release-validation.json`](release-validation.json) records a passing hardware
 rehearsal for its immediate parent commit. Run the rehearsal against a candidate
-commit on `main`, then make a follow-up commit that changes only
-`docs/release-validation.json` to record the result. Tag that record-only commit;
-the workflow verifies both the recorded parent and the single-file change.
+commit on `main`. Download the three `release-candidate-*` artifacts from that
+commit's successful CI run, test those exact files, and record their SHA-256
+digests in `release-validation.json`. The release workflow publishes those same
+artifacts only if the recorded digests match. Then make a follow-up commit that
+changes only `docs/release-validation.json` to record the result. Tag that
+record-only commit; the workflow verifies the recorded parent and single-file
+change.
 
 ## Automated checks
 
@@ -20,6 +24,8 @@ the workflow verifies both the recorded parent and the single-file change.
 - The wheel and source distribution install and contain the firmware and
   MicroPython runtime resources.
 - The exact OTA JSON asset built for the tag passes the device validator.
+- The Windows setup tool, macOS setup tool, and OTA bundle tested on hardware
+  are byte-for-byte the files the release workflow publishes.
 
 ## ESP32-C3 rehearsal
 

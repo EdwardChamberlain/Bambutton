@@ -3,6 +3,7 @@
 
 import argparse
 import json
+import re
 from pathlib import Path
 
 
@@ -19,6 +20,11 @@ REQUIRED_CHECKS = (
     "windows_setup_tool_used",
     "macos_setup_tool_used",
 )
+REQUIRED_ARTIFACT_HASHES = (
+    "windows_setup_tool_sha256",
+    "macos_setup_tool_sha256",
+    "ota_bundle_sha256",
+)
 
 
 def release_readiness_errors(record, tag, expected_commit):
@@ -28,6 +34,9 @@ def release_readiness_errors(record, tag, expected_commit):
 
     if record.get("release_tag") != tag:
         errors.append("release_tag must match {}".format(tag))
+    candidate_version = record.get("candidate_version")
+    if not isinstance(candidate_version, str) or tag != "v" + candidate_version:
+        errors.append("candidate_version must match {}".format(tag))
     for field in ("tested_at_utc", "tested_commit", "board", "micropython_firmware"):
         if not isinstance(record.get(field), str) or not record[field].strip():
             errors.append("{} must be recorded".format(field))
@@ -35,6 +44,15 @@ def release_readiness_errors(record, tag, expected_commit):
         errors.append("tested_commit must match the release commit")
     if record.get("result") != "passed":
         errors.append("result must be passed")
+
+    artifacts = record.get("artifacts")
+    if not isinstance(artifacts, dict):
+        errors.append("artifacts must be an object containing tested SHA-256 digests")
+    else:
+        for name in REQUIRED_ARTIFACT_HASHES:
+            value = artifacts.get(name)
+            if not isinstance(value, str) or re.fullmatch(r"[0-9a-fA-F]{64}", value) is None:
+                errors.append("artifact {} must record a SHA-256 digest".format(name))
 
     checks = record.get("checks")
     if not isinstance(checks, dict):
