@@ -3,8 +3,10 @@
 The release workflow runs CI against the tagged commit and refuses to publish
 unless the tag points at the current `main` commit and
 [`release-validation.json`](release-validation.json) records a passing hardware
-rehearsal against that exact commit and tag. Update the record in a commit on `main` after the
-checks below pass, then tag that verified commit.
+rehearsal for its immediate parent commit. Run the rehearsal against a candidate
+commit on `main`, then make a follow-up commit that changes only
+`docs/release-validation.json` to record the result. Tag that record-only commit;
+the workflow verifies both the recorded parent and the single-file change.
 
 ## Automated checks
 

@@ -41,10 +41,18 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Require a passing hardware record for this tag
-        run: >-
-          python scripts/verify_release_readiness.py "${GITHUB_REF_NAME}"
-          --expected-commit "${GITHUB_SHA}"
+        run: |
+          tested_commit="$(git rev-parse "${GITHUB_SHA}^")"
+          changed_files="$(git diff-tree --no-commit-id --name-only -r "${GITHUB_SHA}")"
+          if [ "$changed_files" != "docs/release-validation.json" ]; then
+            echo "Release record commit must change only docs/release-validation.json"
+            exit 1
+          fi
+          python scripts/verify_release_readiness.py "${GITHUB_REF_NAME}" \
+            --expected-commit "$tested_commit"
 
   python-dist:
     name: Build Python package
