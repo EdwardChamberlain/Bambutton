@@ -12,8 +12,11 @@ except ImportError:
 
 try:
     import ota_manager
+    import config_loader
 except ImportError:
-    from micro import ota_manager
+    from micro import ota_manager, config_loader
+
+save_config = config_loader.save_config
 
 
 CONFIG_PATH = "config.json"
@@ -290,13 +293,6 @@ def build_config(form, current_config):
     )
 
     return config
-
-
-def save_config(path, config):
-    serialized = _json_dumps(config)
-    with open(path, "w") as config_file:
-        config_file.write(serialized)
-        config_file.write("\n")
 
 
 def render_config_page(config, message="", update_status=None):

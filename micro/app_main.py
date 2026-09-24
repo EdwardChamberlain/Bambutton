@@ -76,7 +76,14 @@ network = wifi.WiFi(
     status_led=None,
     timeout_seconds=config["wifi"]["timeout_seconds"],
 )
-network.connect_with_fallback(watchdog_feed=watchdog.feed)
+printer_api_ready = config_loader.is_runtime_config_ready(config)
+if printer_api_ready:
+    network.connect_with_fallback(watchdog_feed=watchdog.feed)
+else:
+    # Keep the setup UI reachable until a complete, explicit printer
+    # configuration has been saved. In particular, do not poll or clear the
+    # baked-in/default printer ID while settings are incomplete.
+    network.start_access_point()
 if network.is_ap_mode():
     print("Wi-Fi unavailable; connect to the setup access point to update settings")
     flasher.on()
@@ -117,6 +124,10 @@ def handle_pending_button_press():
     global PENDING_BUTTON_PRESS
     global PRINTER_STATUS_UPDATE_REQUIRED
 
+    if not printer_api_ready:
+        PENDING_BUTTON_PRESS = False
+        return
+
     try:
         with_network_connection(
             lambda: api.clear_plate(config["printer"]["id"])
@@ -132,6 +143,10 @@ def handle_pending_button_press():
 def handle_printer_status_update():
     global PRINTER_AWAITING_PLATE_CLEAR, PRINTER_STATUS_UPDATE_REQUIRED
     global CHAMBER_LIGHT_IS_ON
+
+    if not printer_api_ready:
+        PRINTER_STATUS_UPDATE_REQUIRED = False
+        return
 
     try:
         response = with_network_connection(

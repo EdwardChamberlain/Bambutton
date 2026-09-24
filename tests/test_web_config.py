@@ -127,6 +127,35 @@ def test_save_config_writes_json(tmp_path):
     web_config.save_config(str(path), config)
 
     assert json.loads(path.read_text()) == config
+    assert not (tmp_path / "config.json.bak").exists()
+    assert not (tmp_path / "config.json.tmp").exists()
+
+
+def test_save_config_restores_previous_file_when_replace_fails(tmp_path, monkeypatch):
+    path = tmp_path / "config.json"
+    old_config = base_config()
+    new_config = web_config.build_config(valid_form(), old_config)
+    path.write_text(json.dumps(old_config))
+    real_rename = web_config.config_loader.os.rename
+
+    def fail_staged_replace(source, destination):
+        if str(source).endswith(".tmp"):
+            raise OSError("simulated interrupted replacement")
+        return real_rename(source, destination)
+
+    monkeypatch.setattr(web_config.config_loader.os, "rename", fail_staged_replace)
+
+    with pytest.raises(OSError, match="simulated interrupted"):
+        web_config.save_config(path, new_config)
+
+    assert json.loads(path.read_text()) == old_config
+    assert not (tmp_path / "config.json.bak").exists()
+    assert not (tmp_path / "config.json.tmp").exists()
+
+
+def test_save_config_rejects_non_object_config(tmp_path):
+    with pytest.raises(ValueError, match="object"):
+        web_config.save_config(tmp_path / "config.json", [])
 
 
 def test_config_page_contains_form_and_does_not_require_formatting_js():
