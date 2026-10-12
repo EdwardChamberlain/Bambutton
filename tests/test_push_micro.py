@@ -8,6 +8,7 @@ def test_push_micro_stages_runtime_before_installing_bootloader(tmp_path, monkey
     micro_dir.mkdir()
     for filename in ("app_main.py", "boot.py", "main.py", "ota_manager.py", "web_config.py"):
         (micro_dir / filename).write_text(filename)
+    (micro_dir / "app_version.json").write_text('{"version":"1.0.0"}')
     config = micro_dir / "config.json"
     config.write_text("{}")
     calls = []
@@ -21,17 +22,18 @@ def test_push_micro_stages_runtime_before_installing_bootloader(tmp_path, monkey
 
     assert calls[0][0:2] == ["mpremote", "exec"]
     assert calls[1][0:2] == ["mpremote", "exec"]
-    staged_paths = [call[-1] for call in calls[2:8]]
+    staged_paths = [call[-1] for call in calls[2:9]]
     assert staged_paths == [
         ":.bambutton/bootstrap/app_main.py",
         ":.bambutton/bootstrap/boot.py",
         ":.bambutton/bootstrap/main.py",
         ":.bambutton/bootstrap/ota_manager.py",
         ":.bambutton/bootstrap/web_config.py",
+        ":.bambutton/bootstrap/app_version.json",
         ":.bambutton/bootstrap/config.json",
     ]
-    assert calls[8][0:2] == ["mpremote", "exec"]
-    assert calls[9] == ["mpremote", "reset"]
+    assert calls[9][0:2] == ["mpremote", "exec"]
+    assert calls[10] == ["mpremote", "reset"]
 
 
 def test_push_micro_no_main_keeps_development_path_without_boot(tmp_path, monkeypatch):

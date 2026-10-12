@@ -1,3 +1,4 @@
+import json
 import runpy
 from pathlib import Path
 import tomllib
@@ -12,6 +13,7 @@ def test_release_gui_includes_all_micro_python_modules():
     assert "app_main.py" in build_script["MICRO_FILES"]
     assert "ota_manager.py" in build_script["MICRO_FILES"]
     assert "config_example.json" in build_script["MICRO_FILES"]
+    assert "app_version.json" in build_script["MICRO_FILES"]
 
 
 def test_desktop_and_python_packages_include_all_runtime_files():
@@ -21,7 +23,7 @@ def test_desktop_and_python_packages_include_all_runtime_files():
     runtime_files = {
         path.name for path in (project_root / "micro").iterdir()
         if path.suffix == ".py"
-    } | {"config_example.json"}
+    } | {"config_example.json", "app_version.json"}
 
     assert set(build_script["MICRO_FILES"]) == runtime_files
 
@@ -38,3 +40,14 @@ def test_desktop_and_python_packages_include_all_runtime_files():
         "include"
     ])
     assert {"/micro/" + filename for filename in runtime_files} <= sdist_files
+
+
+def test_usb_application_version_matches_release_candidate():
+    project_root = Path(__file__).parents[1]
+    app_version = json.loads(
+        (project_root / "micro" / "app_version.json").read_text()
+    )
+    candidate_version = json.loads(
+        (project_root / "docs" / "release-validation.json").read_text()
+    )["candidate_version"]
+    assert app_version["version"] == candidate_version

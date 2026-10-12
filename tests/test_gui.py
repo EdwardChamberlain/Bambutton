@@ -255,6 +255,7 @@ def test_installed_setup_self_test_checks_micro_files_and_firmware(
         "config_example.json",
     ):
         (micro_dir / name).write_text(name)
+    (micro_dir / "app_version.json").write_text('{"version":"1.0.0"}')
     (firmware_dir / "esp32.bin").write_bytes(b"firmware")
     monkeypatch.setattr(gui, "MICRO_DIR", micro_dir)
     monkeypatch.setattr(gui, "DEFAULT_FIRMWARE_DIR", firmware_dir)
@@ -302,6 +303,7 @@ def test_push_micro_files_installs_selected_file_as_config_json(tmp_path, monkey
     micro_dir.mkdir()
     (micro_dir / "b_module.py").write_text("# b")
     (micro_dir / "a_module.py").write_text("# a")
+    (micro_dir / "app_version.json").write_text('{"version":"1.0.0"}')
     config_path = tmp_path / "saved-config.json"
     config_path.write_text(json.dumps({"wifi": {"ssid": "shop"}}))
     calls = []
@@ -315,9 +317,13 @@ def test_push_micro_files_installs_selected_file_as_config_json(tmp_path, monkey
     assert calls[1][0] == "exec"
     assert calls[2][1:] == [str(micro_dir / "a_module.py"), ":.bambutton/bootstrap/a_module.py"]
     assert calls[3][1:] == [str(micro_dir / "b_module.py"), ":.bambutton/bootstrap/b_module.py"]
-    assert calls[4][1:] == [str(config_path), ":.bambutton/bootstrap/config.json"]
-    assert calls[5][0] == "exec"
-    assert calls[6] == ["reset"]
+    assert calls[4][1:] == [
+        str(micro_dir / "app_version.json"),
+        ":.bambutton/bootstrap/app_version.json",
+    ]
+    assert calls[5][1:] == [str(config_path), ":.bambutton/bootstrap/config.json"]
+    assert calls[6][0] == "exec"
+    assert calls[7] == ["reset"]
 
 
 def test_push_micro_files_omits_config_for_web_gui_setup(tmp_path, monkeypatch):

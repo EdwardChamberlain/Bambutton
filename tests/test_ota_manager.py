@@ -53,15 +53,57 @@ def test_stage_and_commit_use_inactive_slot_and_preserve_config(tmp_path):
 def test_legacy_migration_copies_root_files_before_switching_pointer(tmp_path):
     for filename in ota_manager.APP_FILES:
         (tmp_path / filename).write_bytes((filename + "\n").encode())
+    (tmp_path / ota_manager.APP_VERSION_FILE).write_text('{"version":"1.0.0"}')
     manager = ota_manager.OTAUpdateManager(root=str(tmp_path))
 
     assert manager.migrate_legacy() is True
     assert manager.status()["active_slot"] == "app_a"
     assert manager.status()["pending"]["candidate"] == "app_a"
+    assert manager.status()["current_version"] == "1.0.0"
     for filename in ota_manager.APP_FILES:
         assert (tmp_path / ".bambutton/app_a" / filename).read_bytes() == (
             filename + "\n"
         ).encode()
+
+
+def test_genuine_legacy_migration_keeps_legacy_version_fallback(tmp_path):
+    for filename in ota_manager.REQUIRED_APP_FILES:
+        (tmp_path / filename).write_bytes((filename + "\n").encode())
+    manager = ota_manager.OTAUpdateManager(root=str(tmp_path))
+
+    assert manager.migrate_legacy() is True
+    assert manager.status()["current_version"] == "legacy"
+
+
+def test_existing_ota_slot_format_remains_valid(tmp_path):
+    old_bundle = bundle("0.9.0")
+    manager = ota_manager.OTAUpdateManager(root=str(tmp_path))
+
+    manager.stage_bundle(old_bundle)
+    manager.commit_staged()
+    manager._verify_slot("app_a")
+
+    assert manager.status()["current_version"] == "0.9.0"
+
+
+def test_usb_and_ota_installs_report_the_same_candidate_version(tmp_path):
+    usb_root = tmp_path / "usb"
+    usb_root.mkdir()
+    for filename in ota_manager.APP_FILES:
+        (usb_root / filename).write_bytes((filename + "\n").encode())
+    (usb_root / ota_manager.APP_VERSION_FILE).write_text('{"version":"1.0.0"}')
+    usb_manager = ota_manager.OTAUpdateManager(root=str(usb_root))
+    assert usb_manager.migrate_legacy() is True
+
+    ota_root = tmp_path / "ota"
+    ota_root.mkdir()
+    ota_manager_for_update = ota_manager.OTAUpdateManager(root=str(ota_root))
+    ota_manager_for_update.stage_bundle(bundle("1.0.0"))
+    ota_manager_for_update.commit_staged()
+
+    assert usb_manager.status()["current_version"] == (
+        ota_manager_for_update.status()["current_version"]
+    )
 
 
 def test_confirmed_candidate_clears_pending_state(tmp_path):
@@ -120,6 +162,7 @@ def test_bootstrap_candidate_failure_returns_to_legacy_main(tmp_path, monkeypatc
         if filename == "app_main.py":
             content = b"raise RuntimeError('broken bootstrap')\n"
         (bootstrap / filename).write_bytes(content)
+    (bootstrap / ota_manager.APP_VERSION_FILE).write_text('{"version":"1.0.0"}')
     (bootstrap / "main.py").write_text("stable loader\n")
     (tmp_path / "main.py").write_text("LEGACY_BOOTED = True\n")
 
@@ -182,6 +225,7 @@ def test_bootstrap_migration_uses_staged_files_and_cleans_up(tmp_path, monkeypat
         if filename == "app_main.py":
             content = b"BOOTSTRAPPED = True\n"
         (bootstrap / filename).write_bytes(content)
+    (bootstrap / ota_manager.APP_VERSION_FILE).write_text('{"version":"1.0.0"}')
     (tmp_path / ".bambutton/bootstrap-install.marker").write_text(
         "bambutton-bootstrap-v1\n"
     )
@@ -191,6 +235,7 @@ def test_bootstrap_migration_uses_staged_files_and_cleans_up(tmp_path, monkeypat
     manager.launch()
 
     assert manager.status()["active_slot"] == "app_a"
+    assert manager.status()["current_version"] == "1.0.0"
     assert not bootstrap.exists()
     assert not (tmp_path / ".bambutton/bootstrap-install.marker").exists()
     assert (tmp_path / ".bambutton/app_a/app_main.py").read_bytes() == (

@@ -24,6 +24,7 @@ MICRO_FILES = [
     "wifi.py",
     "web_config.py",
     "config_example.json",
+    "app_version.json",
 ]
 
 

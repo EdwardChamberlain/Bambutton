@@ -213,12 +213,27 @@ def run_installation_self_test():
         "web_config.py",
         "wifi.py",
         "config_example.json",
+        "app_version.json",
     )
     missing = [name for name in required_files if not (MICRO_DIR / name).is_file()]
     if missing:
         raise RuntimeError(
             "Bambutton installation is missing: {}".format(", ".join(missing))
         )
+    try:
+        version_metadata = json.loads(
+            (MICRO_DIR / "app_version.json").read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError) as exc:
+        raise RuntimeError(
+            "Bambutton application version metadata is invalid: {}".format(exc)
+        )
+    if (
+        not isinstance(version_metadata, dict)
+        or not isinstance(version_metadata.get("version"), str)
+        or not version_metadata["version"].strip()
+    ):
+        raise RuntimeError("Bambutton application version metadata is invalid")
     validate_firmware(first_firmware_file())
 
 
@@ -626,6 +641,9 @@ def push_micro_files(config_path, clean=False):
         run_mpremote(mpremote_args("exec", CLEAN_BOARD_CODE))
 
     files = sorted(MICRO_DIR.glob("*.py"))
+    app_version_file = MICRO_DIR / "app_version.json"
+    if app_version_file.is_file():
+        files.append(app_version_file)
     run_mpremote(mpremote_args("exec", BOOTSTRAP_PREPARE_CODE))
     for path in files:
         run_mpremote(mpremote_args(

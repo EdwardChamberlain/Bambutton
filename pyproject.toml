@@ -53,6 +53,7 @@ packages = ["src/bambutton"]
 "micro/wifi.py" = "bambutton/micro/wifi.py"
 "micro/web_config.py" = "bambutton/micro/web_config.py"
 "micro/config_example.json" = "bambutton/micro/config_example.json"
+"micro/app_version.json" = "bambutton/micro/app_version.json"
 "firmware" = "bambutton/firmware"
 
 [tool.hatch.build.targets.sdist]
@@ -76,4 +77,5 @@ include = [
   "/micro/wifi.py",
   "/micro/web_config.py",
   "/micro/config_example.json",
+  "/micro/app_version.json",
 ]

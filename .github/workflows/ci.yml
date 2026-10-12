@@ -48,6 +48,20 @@ jobs:
       - name: Build and validate release OTA candidate
         run: |
           version="$(python -c 'import json; print(json.load(open("docs/release-validation.json"))["candidate_version"])')"
+          python - "$version" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          candidate_version = sys.argv[1]
+          metadata = json.loads(Path("micro/app_version.json").read_text())
+          if metadata.get("version") != candidate_version:
+              raise SystemExit(
+                  "USB application version {} does not match candidate {}".format(
+                      metadata.get("version"), candidate_version
+                  )
+              )
+          PY
           python scripts/build_ota_bundle.py \
             --version "$version" \
             --output candidate-assets/bambutton-ota.json
