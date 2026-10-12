@@ -292,6 +292,7 @@ def build_config(form, current_config):
         web.get("password", DEFAULT_WEB_PASSWORD) or DEFAULT_WEB_PASSWORD,
     )
 
+    config_loader.validate_config(config)
     return config
 
 

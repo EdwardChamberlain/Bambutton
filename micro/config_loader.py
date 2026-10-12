@@ -72,6 +72,19 @@ _NUMBER_FIELDS = {
     "button": ("pin", "debounce_ms"),
 }
 _KNOWN_SECTIONS = tuple(DEFAULT_CONFIG.keys())
+_FIELD_RANGES = {
+    ("wifi", "timeout_seconds"): (1, 120),
+    ("api", "request_timeout_seconds"): (1, 120),
+    ("printer", "poll_interval_seconds"): (1, 3600),
+    ("led", "pin"): (0, 21),
+    ("led", "flash_interval_ms"): (10, 60000),
+    ("button", "pin"): (0, 21),
+    ("button", "debounce_ms"): (0, 5000),
+}
+_ALLOWED_VALUES = {
+    ("button", "pull"): ("", "none", "up", "down"),
+    ("button", "trigger"): ("rising", "falling", "both"),
+}
 
 
 def load_config(path="config.json"):
@@ -123,8 +136,7 @@ def is_runtime_config_ready(config):
 def save_config(path, config):
     """Replace a config atomically, retaining the previous copy until verified."""
     path = str(path)
-    if not isinstance(config, dict):
-        raise ValueError("Configuration must be an object")
+    validate_config(config)
 
     temporary_path = path + ".tmp"
     backup_path = path + ".bak"
@@ -186,27 +198,93 @@ def _load_config_file(path):
 
 
 def _is_valid_config_shape(config):
-    if not isinstance(config, dict):
+    try:
+        validate_config(config)
+    except (TypeError, ValueError):
         return False
+    return True
+
+
+def validate_config(config):
+    """Reject settings that would fail hardware or network initialization."""
+    if not isinstance(config, dict):
+        raise ValueError("Configuration must be an object")
 
     for section in _KNOWN_SECTIONS:
         if section in config and not isinstance(config[section], dict):
-            return False
+            raise ValueError("{} must be an object".format(section))
 
     for section, fields in _STRING_FIELDS.items():
         values = config.get(section, {})
         for field in fields:
-            if field in values and not isinstance(values[field], str):
-                return False
+            if field not in values:
+                continue
+            value = values[field]
+            if not isinstance(value, str):
+                raise ValueError("{}.{} must be text".format(section, field))
+            allowed = _ALLOWED_VALUES.get((section, field))
+            if allowed and value.lower() not in allowed:
+                raise ValueError(
+                    "{}.{} must be one of: {}".format(
+                        section, field, ", ".join(allowed)
+                    )
+                )
+
+    wifi = config.get("wifi", {})
+    for field, maximum in (("ssid", 32), ("hostname", 63)):
+        value = wifi.get(field)
+        if value is not None and len(value.encode("utf-8")) > maximum:
+            raise ValueError(
+                "wifi.{} must be at most {} UTF-8 bytes".format(field, maximum)
+            )
+    hostname = wifi.get("hostname")
+    if hostname is not None:
+        if not hostname or len(hostname) > 63:
+            raise ValueError("wifi.hostname must be between 1 and 63 characters")
+        if not _is_ascii_alphanumeric(hostname[0]) or not _is_ascii_alphanumeric(
+            hostname[-1]
+        ):
+            raise ValueError("wifi.hostname must start and end with a letter or number")
+        if any(
+            not _is_ascii_alphanumeric(character) and character != "-"
+            for character in hostname
+        ):
+            raise ValueError(
+                "wifi.hostname may contain only letters, numbers, and hyphens"
+            )
+    for field in ("password", "ap_password"):
+        value = wifi.get(field)
+        if value is not None and value:
+            length = len(value.encode("utf-8"))
+            is_hex_psk = length == 64 and all(
+                character in "0123456789abcdefABCDEF" for character in value
+            )
+            if (length < 8 or length > 63) and not is_hex_psk:
+                raise ValueError(
+                    "wifi.{} must be empty, 8 to 63 bytes, "
+                    "or a 64-digit hex key".format(field)
+                )
+    web_password = config.get("web", {}).get("password")
+    if web_password is not None and not web_password:
+        raise ValueError("web.password must not be empty")
 
     for section, fields in _NUMBER_FIELDS.items():
         values = config.get(section, {})
         for field in fields:
             value = values.get(field)
             if field in values and (
-                not isinstance(value, (int, float)) or isinstance(value, bool)
+                not isinstance(value, int) or isinstance(value, bool)
             ):
-                return False
+                raise ValueError("{}.{} must be an integer".format(section, field))
+            bounds = _FIELD_RANGES.get((section, field))
+            if field in values and bounds:
+                minimum, maximum = bounds
+                if value < minimum or value > maximum:
+                    raise ValueError(
+                        "{}.{} must be between {} and {}".format(
+                            section, field, minimum, maximum
+                        )
+                    )
 
     if "id" in config.get("printer", {}):
         printer_id = config["printer"]["id"]
@@ -215,9 +293,13 @@ def _is_valid_config_shape(config):
             or isinstance(printer_id, bool)
             or printer_id < 0
         ):
-            return False
+            raise ValueError("printer.id must be a non-negative integer or null")
 
-    return True
+    effective_config = _copy_dict(DEFAULT_CONFIG)
+    _deep_update(effective_config, config)
+    if effective_config["led"]["pin"] == effective_config["button"]["pin"]:
+        raise ValueError("led.pin and button.pin must use different GPIO pins")
+    return config
 
 
 def _remove_file(path):
@@ -245,3 +327,7 @@ def _deep_update(target, source):
             _deep_update(target[key], value)
         else:
             target[key] = value
+
+
+def _is_ascii_alphanumeric(value):
+    return ("a" <= value <= "z") or ("A" <= value <= "Z") or ("0" <= value <= "9")

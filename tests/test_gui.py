@@ -297,6 +297,28 @@ def test_validate_config_file_rejects_invalid_files(tmp_path, contents, error):
         gui.validate_config_file(config_path)
 
 
+def test_validate_config_file_rejects_invalid_hardware_values(tmp_path):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps({"button": {"pull": "invalid"}}))
+
+    with pytest.raises(ValueError, match="button.pull"):
+        gui.validate_config_file(config_path)
+
+
+def test_flash_board_rejects_invalid_config_before_erasing(tmp_path, monkeypatch):
+    firmware = tmp_path / "firmware.bin"
+    firmware.write_bytes(b"firmware")
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps({"button": {"pull": "invalid"}}))
+    flashed = []
+    monkeypatch.setattr(gui, "flash_firmware", lambda path: flashed.append(path))
+
+    with pytest.raises(ValueError, match="button.pull"):
+        gui.flash_board(firmware, config_path)
+
+    assert flashed == []
+
+
 def test_push_micro_files_installs_selected_file_as_config_json(tmp_path, monkeypatch):
     micro_dir = tmp_path / "micro"
     micro_dir.mkdir()
