@@ -11,7 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RECORD_PATH = PROJECT_ROOT / "docs" / "release-validation.json"
 REQUIRED_CHECKS = (
     "fresh_usb_install",
-    "usb_upgrade_from_previous_release",
+    "clean_usb_reinstall_with_settings_restore",
     "settings_save_power_interruption_recovery",
     "plate_clear_api_outage_recovery",
     "web_ota_install",
