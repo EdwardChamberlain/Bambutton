@@ -81,6 +81,18 @@ printer ID, and any hardware pin changes. The default wiring is GPIO 3 for the
 LED and GPIO 4 for the button. `micro/config_example.json` is a clean template
 if you need one.
 
+Back up a board's current settings before a clean USB reinstall:
+
+```bash
+mpremote cp :config.json config-backup.json
+```
+
+Keep that file private because it contains Wi-Fi and API credentials. To restore
+the settings, choose `config-backup.json` in **Config-based setup**, or copy it
+to `micro/config.json` before running the manual USB install below. The clean
+install erases the old settings and application files before installing the
+selected configuration.
+
 Erase the board, flash the bundled ESP32-C3 MicroPython firmware, and copy the
 application files:
 
@@ -97,8 +109,8 @@ usually find the port automatically; if it cannot, pass it to the copy script:
 python scripts/push_micro.py --clean --device /dev/tty.usbmodemXXXX
 ```
 
-The copy script resets the board when it finishes. To update only the
-configuration later:
+The copy script resets the board when it finishes. To change only the
+configuration over USB, without replacing application files:
 
 ```bash
 mpremote cp micro/config.json :
@@ -125,10 +137,11 @@ detection is unavailable.
 ## Web GUI
 
 After flashing with Web GUI setup, the board starts a setup access point when it
-cannot connect to configured Wi-Fi. Connect to the board's wifi (for
-example, `bambutton-ABCD`) with and use username `admin`, password `bambutton`, then open
-`http://192.168.4.1/`. Enter the Wi-Fi, Bambuddy API,
-printer, and pin settings and choose **Save and restart**.
+cannot connect to configured Wi-Fi. First join the board's Wi-Fi network (for
+example, `bambutton-ABCD`) using the access-point password (`bambutton` by
+default). Then open `http://192.168.4.1/` and sign in to the web page with
+username `admin` and the web password (`bambutton` by default). The access-point
+password and web password are separate settings.
 
 Once connected to Wi-Fi, open the board's hostname or assigned IP address. The
 page can load printers from Bambuddy and update the board without USB. The debug page reports
@@ -144,20 +157,30 @@ the new application confirms a healthy boot, so interrupted transfers and failed
 restarts roll back automatically. Wi-Fi, API, printer, and web settings remain
 in `config.json` and are never part of an application update.
 
-The first OTA-capable installation must be flashed over USB so the stable
-bootloader and migration code are installed. The USB helper stages the complete
-runtime before installing the boot hook, preserves an existing legacy
-`main.py`, and migrates the application into slot A on the next boot. Full
-MicroPython firmware updates still require USB flashing.
+The first OTA-capable installation from an older release must use a clean USB
+install so the stable bootloader and migration code are installed. USB is for a
+fresh installation, a clean reinstall, or changing MicroPython firmware; it
+does not update an existing application in place. Use OTA from the web page for
+application updates. A clean install erases settings and application state, so
+back up `config.json` first if you want to restore it afterward.
 
 ## Release Packaging
 
-Package versions are derived from Git tags via `hatch-vcs`. A tag beginning with
-`v` starts the GitHub release workflow:
+All pull requests target `main`. Releases are published from version tags by
+the GitHub release workflow. For v1.0.0, follow the [release
+checklist](docs/release-checklist.md): run CI on a candidate commit on `main`,
+test the exact Windows, macOS, and OTA candidate artifacts from that run, then
+record the hardware results and SHA-256 hashes in `docs/release-validation.json`.
+Commit only that record file after testing, and tag the resulting `main` commit
+as `v1.0.0`. The workflow verifies the tested parent, checks the recorded hashes
+against the candidate artifacts, reruns CI, and publishes the same files.
+
+Package versions are derived from Git tags via `hatch-vcs`. The final release
+tag is pushed with:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v1.0.0
+git push origin v1.0.0
 ```
 
 The workflow attaches Windows and macOS setup-tool archives, the verified
@@ -169,11 +192,20 @@ python -m pip install ".[dev]"
 python -m build
 ```
 
-Build an application bundle locally with:
+Build the v1.0.0 application bundle locally with:
 
 ```bash
-python scripts/build_ota_bundle.py --version 0.2.0 --output dist/bambutton-ota.json
+python scripts/build_ota_bundle.py --version 1.0.0 --output dist/bambutton-ota.json
 ```
+
+## Supported Release Targets
+
+The published desktop setup tools target Windows x64 and macOS arm64, matching
+the `windows-latest` and `macos-latest` runners in the release CI workflow. The
+bundled board firmware targets ESP32-C3 Generic; other board and desktop
+architectures are not release artifacts. See the [GitHub-hosted runner
+specifications](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)
+for the current architecture behind each runner label.
 
 ## Hardware
 

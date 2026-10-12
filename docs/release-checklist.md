@@ -16,6 +16,8 @@ change.
 
 - The required `CI / Quality` check passes on the pull request and the final
   `main` commit.
+- The USB installer regression test confirms an application copy without
+  `--clean` is rejected before the board is changed.
 - The `CI / Desktop smoke (windows-latest)` and
   `CI / Desktop smoke (macos-latest)` checks pass.
 - CI reports per-file coverage for every Python source file in `micro/`,
@@ -34,13 +36,15 @@ board model/revision, MicroPython firmware image/version, test date, commit,
 and result in `release-validation.json`.
 
 - Erase the board and perform a fresh USB install with the release tool.
-- Upgrade over USB from the last published release while preserving settings.
+- Back up settings, perform a clean USB reinstall from the previous release,
+  confirm the old settings and application are erased, then restore the backup.
 - Save settings, interrupt power during the save, and verify the board boots
   with either the old or new complete settings.
 - Request a plate clear with the API unavailable, restore Bambuddy/Wi-Fi, and
   verify the queued press resolves once without losing the LED indication.
 - Install an OTA update from the web UI, including a web UI file larger than
-  the former 32 KiB limit; verify boot confirmation and active-slot contents.
+  the former 32 KiB limit while staying within the complete bundle limit; verify
+  boot confirmation and active-slot contents.
 - Interrupt an OTA update and verify the prior application remains bootable.
 - Use the released Windows and macOS setup tools with the board and confirm
   that each completes a USB install and starts the configured application.

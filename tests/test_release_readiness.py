@@ -89,6 +89,7 @@ def test_pending_template_blocks_release_until_hardware_results_are_recorded():
 
     assert "result must be passed" in errors
     assert "check fresh_usb_install is incomplete" in errors
+    assert "check clean_usb_reinstall_with_settings_restore is incomplete" in errors
     assert "board must be recorded" in errors
     assert "artifact windows_setup_tool_sha256 must record a SHA-256 digest" in errors
 
