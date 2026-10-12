@@ -65,8 +65,8 @@ REMOTE_BUNDLE_URL = (
 )
 MAX_FILE_BYTES = 40 * 1024
 MAX_BUNDLE_BYTES = 128 * 1024
-# Keep the downloaded JSON below the web server's 128 KiB request-body ceiling.
-MAX_BUNDLE_BODY_BYTES = 96 * 1024
+# Keep 24 KiB below the web server's 128 KiB request-body ceiling.
+MAX_BUNDLE_BODY_BYTES = 104 * 1024
 OTA_STAGING_OVERHEAD_BYTES = 48 * 1024
 
 
