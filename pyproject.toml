@@ -10,12 +10,22 @@ requires-python = ">=3.11"
 authors = [
   { name = "Edward Chamberlain" },
 ]
+license = "MIT"
+license-files = ["LICENSE"]
 dependencies = [
   "esptool==5.2.0",
   "FreeSimpleGUI==5.2.0.post1",
   "mpremote==1.28.0",
 ]
 dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/EdwardChamberlain/Bambutton"
+Repository = "https://github.com/EdwardChamberlain/Bambutton"
+Documentation = "https://github.com/EdwardChamberlain/Bambutton/blob/main/README.md"
+Issues = "https://github.com/EdwardChamberlain/Bambutton/issues"
+Support = "https://github.com/EdwardChamberlain/Bambutton/issues"
+Changelog = "https://github.com/EdwardChamberlain/Bambutton/releases"
 
 [project.scripts]
 bambutton = "bambutton.gui:main"
@@ -40,6 +50,8 @@ local_scheme = "no-local-version"
 packages = ["src/bambutton"]
 
 [tool.hatch.build.targets.wheel.force-include]
+"LICENSE" = "bambutton/LICENSE"
+"THIRD_PARTY_NOTICES.md" = "bambutton/THIRD_PARTY_NOTICES.md"
 "micro/api.py" = "bambutton/micro/api.py"
 "micro/app_main.py" = "bambutton/micro/app_main.py"
 "micro/bambuddy_api.py" = "bambutton/micro/bambuddy_api.py"
@@ -57,6 +69,8 @@ packages = ["src/bambutton"]
 
 [tool.hatch.build.targets.sdist]
 include = [
+  "/LICENSE",
+  "/THIRD_PARTY_NOTICES.md",
   "/README.md",
   "/pyproject.toml",
   "/src",
