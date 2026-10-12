@@ -1,5 +1,7 @@
 import sys
 
+import pytest
+
 from scripts import push_micro
 
 
@@ -34,6 +36,25 @@ def test_push_micro_stages_runtime_before_installing_bootloader(tmp_path, monkey
     assert calls[9] == ["mpremote", "reset"]
 
 
+def test_push_micro_rejects_usb_install_without_clean_before_writing(
+    tmp_path, monkeypatch
+):
+    micro_dir = tmp_path / "micro"
+    micro_dir.mkdir()
+    (micro_dir / "app_main.py").write_text("application")
+    calls = []
+
+    monkeypatch.setattr(push_micro, "MICRO_DIR", micro_dir)
+    monkeypatch.setattr(push_micro, "CONFIG_FILE", micro_dir / "config.json")
+    monkeypatch.setattr(push_micro, "run", lambda command: calls.append(command))
+    monkeypatch.setattr(sys, "argv", ["push_micro.py"])
+
+    with pytest.raises(SystemExit, match="requires --clean.*Use OTA"):
+        push_micro.main()
+
+    assert calls == []
+
+
 def test_push_micro_no_main_keeps_development_path_without_boot(tmp_path, monkeypatch):
     micro_dir = tmp_path / "micro"
     micro_dir.mkdir()
@@ -46,7 +67,7 @@ def test_push_micro_no_main_keeps_development_path_without_boot(tmp_path, monkey
     monkeypatch.setattr(push_micro, "MICRO_DIR", micro_dir)
     monkeypatch.setattr(push_micro, "CONFIG_FILE", config)
     monkeypatch.setattr(push_micro, "run", lambda command: calls.append(command))
-    monkeypatch.setattr(sys, "argv", ["push_micro.py", "--no-main"])
+    monkeypatch.setattr(sys, "argv", ["push_micro.py", "--clean", "--no-main"])
 
     push_micro.main()
 

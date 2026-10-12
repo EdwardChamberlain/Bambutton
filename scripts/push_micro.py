@@ -153,12 +153,18 @@ for name in os.listdir():
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Push MicroPython application files to the connected board.",
+        description=(
+            "Install MicroPython files over USB after erasing the board. "
+            "Use OTA for application updates."
+        ),
     )
     parser.add_argument(
         "--clean",
         action="store_true",
-        help="Delete all files from the board filesystem before copying files.",
+        help=(
+            "Erase all board files and settings before installing. Required "
+            "for every USB installation."
+        ),
     )
     parser.add_argument(
         "--device",
@@ -174,9 +180,18 @@ def main():
         "--nomain",
         dest="no_main",
         action="store_true",
-        help="Do not copy main.py, preventing the application from auto-starting.",
+        help=(
+            "Development only: do not copy main.py or boot.py. This still "
+            "requires a clean USB install."
+        ),
     )
     args = parser.parse_args()
+
+    if not args.clean:
+        raise SystemExit(
+            "USB installation requires --clean and erases existing settings "
+            "and application state. Use OTA for application updates."
+        )
 
     files = sorted(MICRO_DIR.glob("*.py"))
     if args.no_main:

@@ -35,7 +35,9 @@ MicroPython firmware and application files, and offers two setup modes:
   provisioning multiple boards from the same file.
 
 The release tool does not require Python, `mpremote`, or `esptool`. Connect the
-board with a data-capable USB cable before starting the flash.
+board with a data-capable USB cable before starting the flash. The setup
+assistant erases the board and its settings; save a copy of `config.json`
+before reinstalling. Use OTA from the web page for application updates.
 
 To run the assistant from source during development:
 

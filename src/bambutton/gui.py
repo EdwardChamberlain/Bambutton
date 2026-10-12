@@ -270,6 +270,15 @@ def build_window():
         ],
         [
             sg.Text(
+                "USB setup erases existing settings and application state. "
+                "Back up config.json first; use OTA for application updates.",
+                text_color=secondary_text_color,
+                expand_x=True,
+                pad=(0, (0, 12)),
+            )
+        ],
+        [
+            sg.Text(
                 "SETUP MODE",
                 font=("Helvetica", 9, "bold"),
                 text_color=secondary_text_color,
