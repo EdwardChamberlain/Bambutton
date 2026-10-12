@@ -158,6 +158,18 @@ def test_save_config_rejects_non_object_config(tmp_path):
         web_config.save_config(tmp_path / "config.json", [])
 
 
+def test_save_config_rejects_invalid_hardware_values_before_writing(tmp_path):
+    path = tmp_path / "config.json"
+    original = base_config()
+    path.write_text(json.dumps(original))
+
+    with pytest.raises(ValueError, match="button.pull"):
+        web_config.save_config(path, {"button": {"pull": "invalid"}})
+
+    assert json.loads(path.read_text()) == original
+    assert not (tmp_path / "config.json.tmp").exists()
+
+
 def test_config_page_contains_form_and_does_not_require_formatting_js():
     page = web_config.render_config_page(base_config())
 
