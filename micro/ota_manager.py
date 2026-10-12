@@ -49,6 +49,7 @@ APP_FILES = (
     "wifi.py",
 )
 REQUIRED_APP_FILES = APP_FILES
+APP_VERSION_FILE = "app_version.json"
 UPDATE_ROOT = ".bambutton"
 BOOTSTRAP_ROOT = UPDATE_ROOT + "/bootstrap"
 BOOTSTRAP_INSTALL_MARKER = UPDATE_ROOT + "/bootstrap-install.marker"
@@ -221,9 +222,19 @@ class OTAUpdateManager:
                     )
                     return False
 
+            version_data = self._read_json(source_root + "/" + APP_VERSION_FILE)
+            application_version = (
+                version_data.get("version") if isinstance(version_data, dict) else None
+            )
+            if (
+                not isinstance(application_version, str)
+                or not application_version.strip()
+            ):
+                application_version = "legacy"
+
             self._write_json(self._slot_path("app_a.tmp", "manifest.json"), {
                 "format": UPDATE_FORMAT,
-                "version": "legacy",
+                "version": application_version,
                 "release_notes": "Migrated from the flat-root application",
                 "minimum_bootloader": BOOTLOADER_VERSION,
                 "files": manifest_files,

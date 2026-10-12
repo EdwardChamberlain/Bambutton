@@ -179,6 +179,9 @@ def main():
     args = parser.parse_args()
 
     files = sorted(MICRO_DIR.glob("*.py"))
+    app_version_file = MICRO_DIR / "app_version.json"
+    if app_version_file.exists():
+        files.append(app_version_file)
     if args.no_main:
         files = [path for path in files if path.name not in ("main.py", "boot.py")]
 

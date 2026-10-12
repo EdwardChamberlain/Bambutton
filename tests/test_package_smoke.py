@@ -11,6 +11,7 @@ REQUIRED_FILES = (
     "micro/app_main.py",
     "micro/boot.py",
     "micro/config_example.json",
+    "micro/app_version.json",
     "micro/ota_manager.py",
     "micro/web_config.py",
     "firmware/ESP32_GENERIC_C3-20260406-v1.28.0.bin",
