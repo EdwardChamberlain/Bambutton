@@ -229,3 +229,10 @@ Use GPIO numbers, not physical pin positions.
 - Disconnect power before changing wiring.
 - Once configured a "power only" cable will be ok as no data is transferred.
 - You can power this from the P1S internal USB port.
+
+## Licence
+
+Bambutton is released under the [MIT Licence](LICENSE). The distributed setup
+application and firmware also contain third-party components; see
+[third-party notices](THIRD_PARTY_NOTICES.md) and the notices shipped with the
+firmware.

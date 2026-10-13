@@ -22,6 +22,11 @@ def test_build_gui_main_invokes_pyinstaller_with_bundled_resources(
     monkeypatch.setattr(build_gui, "ENTRYPOINT", entrypoint)
     monkeypatch.setattr(build_gui, "MICRO_DIR", micro_dir)
     monkeypatch.setattr(build_gui, "FIRMWARE_DIR", firmware_dir)
+    monkeypatch.setattr(build_gui, "PROJECT_LICENSE", tmp_path / "LICENSE")
+    monkeypatch.setattr(
+        build_gui, "THIRD_PARTY_NOTICES", tmp_path / "THIRD_PARTY_NOTICES.md"
+    )
+    monkeypatch.setattr(build_gui, "third_party_license_data_args", lambda: [])
     monkeypatch.setattr(build_gui.subprocess, "run", lambda *args, **kwargs: calls.append(args))
 
     build_gui.main()
@@ -32,6 +37,8 @@ def test_build_gui_main_invokes_pyinstaller_with_bundled_resources(
     assert str(entrypoint) == command[-1]
     assert any("bambutton/micro" in item for item in command)
     assert any("bambutton/firmware" in item for item in command)
+    assert any(str(tmp_path / "LICENSE") in item for item in command)
+    assert any(str(tmp_path / "THIRD_PARTY_NOTICES.md") in item for item in command)
 
 
 def test_run_main_passes_selected_device_to_mpremote(tmp_path, monkeypatch):

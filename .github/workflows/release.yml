@@ -167,6 +167,39 @@ jobs:
           name: python-dist
           path: release-assets
 
+      - name: Download corresponding esptool source archive
+        run: |
+          python - <<'PY'
+          import subprocess
+          import sys
+          import tomllib
+          from pathlib import Path
+
+          project = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+          requirement = next(
+              item for item in project["project"]["dependencies"]
+              if item.lower().startswith("esptool==")
+          )
+          version = requirement.split("==", 1)[1]
+          subprocess.run(
+              [
+                  sys.executable,
+                  "-m",
+                  "pip",
+                  "download",
+                  "--no-deps",
+                  "--no-binary=:all:",
+                  "--dest",
+                  "release-assets",
+                  "esptool==" + version,
+              ],
+              check=True,
+          )
+          source_archive = Path("release-assets") / ("esptool-" + version + ".tar.gz")
+          if not source_archive.is_file():
+              raise SystemExit("esptool corresponding source archive was not downloaded")
+          PY
+
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:

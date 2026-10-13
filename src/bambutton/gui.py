@@ -6,6 +6,7 @@ import secrets
 import sys
 import tempfile
 import time
+import webbrowser
 from pathlib import Path
 
 try:
@@ -22,6 +23,8 @@ if hasattr(sys, "_MEIPASS"):
 else:
     RESOURCE_ROOT = SOURCE_ROOT if (SOURCE_ROOT / "micro").exists() else PACKAGE_ROOT
 
+LICENSE_PATH = RESOURCE_ROOT / "LICENSE"
+THIRD_PARTY_NOTICES_PATH = RESOURCE_ROOT / "THIRD_PARTY_NOTICES.md"
 MICRO_DIR = RESOURCE_ROOT / "micro"
 CONFIG_EXAMPLE_PATH = MICRO_DIR / "config_example.json"
 DEFAULT_FIRMWARE_DIR = RESOURCE_ROOT / "firmware"
@@ -194,6 +197,12 @@ def main():
 
             if event == "-FLASH-":
                 handle_flash(window, values)
+
+            if event == "-LICENSE-":
+                open_legal_document(window, LICENSE_PATH)
+
+            if event == "-THIRD_PARTY_NOTICES-":
+                open_legal_document(window, THIRD_PARTY_NOTICES_PATH)
     finally:
         window.close()
 
@@ -393,12 +402,30 @@ def build_window():
                 font=("Helvetica", 10, "bold"),
             )
         ],
+        [
+            sg.Button("View licence", key="-LICENSE-", size=(14, 1)),
+            sg.Button(
+                "Third-party notices",
+                key="-THIRD_PARTY_NOTICES-",
+                size=(20, 1),
+            ),
+        ],
     ]
 
     window = sg.Window("Bambutton Setup", layout, finalize=True)
     match_config_input_height(window)
     update_action_states(window, window.read(timeout=0)[1])
     return window
+
+
+def open_legal_document(window, path):
+    try:
+        document = Path(path).resolve(strict=True)
+        if not webbrowser.open(document.as_uri()):
+            raise OSError("No application accepted the document")
+    except OSError as exc:
+        window["-STATUS-"].update(value="Could not open the licence information.")
+        sg.popup_error("Could not open document", str(exc))
 
 
 def match_config_input_height(window):
