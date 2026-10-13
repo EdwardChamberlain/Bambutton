@@ -52,6 +52,7 @@ packages = ["src/bambutton"]
 [tool.hatch.build.targets.wheel.force-include]
 "LICENSE" = "bambutton/LICENSE"
 "THIRD_PARTY_NOTICES.md" = "bambutton/THIRD_PARTY_NOTICES.md"
+"THIRD_PARTY_LICENSES" = "bambutton/third_party_licenses"
 "micro/api.py" = "bambutton/micro/api.py"
 "micro/app_main.py" = "bambutton/micro/app_main.py"
 "micro/bambuddy_api.py" = "bambutton/micro/bambuddy_api.py"
@@ -71,6 +72,7 @@ packages = ["src/bambutton"]
 include = [
   "/LICENSE",
   "/THIRD_PARTY_NOTICES.md",
+  "/THIRD_PARTY_LICENSES",
   "/README.md",
   "/pyproject.toml",
   "/src",
