@@ -63,9 +63,9 @@ REMOTE_BUNDLE_URL = (
     "https://github.com/EdwardChamberlain/Bambutton/releases/latest/"
     "download/bambutton-ota.json"
 )
-MAX_FILE_BYTES = 40 * 1024
+MAX_FILE_BYTES = 36 * 1024
 MAX_BUNDLE_BYTES = 128 * 1024
-# Keep the downloaded JSON below the web server's 128 KiB request-body ceiling.
+# Keep OTA payloads compatible with the 96 KiB reader in installed v1 loaders.
 MAX_BUNDLE_BODY_BYTES = 96 * 1024
 OTA_STAGING_OVERHEAD_BYTES = 48 * 1024
 
