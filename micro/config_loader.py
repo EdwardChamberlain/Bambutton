@@ -72,13 +72,15 @@ _NUMBER_FIELDS = {
     "button": ("pin", "debounce_ms"),
 }
 _KNOWN_SECTIONS = tuple(DEFAULT_CONFIG.keys())
+_SUPPORTED_GPIO_PINS = tuple(range(14)) + (20, 21)
+MAX_API_REQUEST_TIMEOUT_SECONDS = 10
 _FIELD_RANGES = {
     ("wifi", "timeout_seconds"): (1, 120),
-    ("api", "request_timeout_seconds"): (1, 120),
+    # app_main's watchdog expires after 60 seconds. Keep blocking API calls
+    # short enough that request setup and response reads retain headroom.
+    ("api", "request_timeout_seconds"): (1, MAX_API_REQUEST_TIMEOUT_SECONDS),
     ("printer", "poll_interval_seconds"): (1, 3600),
-    ("led", "pin"): (0, 21),
     ("led", "flash_interval_ms"): (10, 60000),
-    ("button", "pin"): (0, 21),
     ("button", "debounce_ms"): (0, 5000),
 }
 _ALLOWED_VALUES = {
@@ -252,18 +254,22 @@ def validate_config(config):
             raise ValueError(
                 "wifi.hostname may contain only letters, numbers, and hyphens"
             )
-    for field in ("password", "ap_password"):
-        value = wifi.get(field)
-        if value is not None and value:
-            length = len(value.encode("utf-8"))
-            is_hex_psk = length == 64 and all(
-                character in "0123456789abcdefABCDEF" for character in value
+    station_password = wifi.get("password")
+    if station_password:
+        length = len(station_password.encode("utf-8"))
+        is_hex_psk = length == 64 and all(
+            character in "0123456789abcdefABCDEF" for character in station_password
+        )
+        if (length < 8 or length > 63) and not is_hex_psk:
+            raise ValueError(
+                "wifi.password must be empty, 8 to 63 bytes, or a 64-digit hex key"
             )
-            if (length < 8 or length > 63) and not is_hex_psk:
-                raise ValueError(
-                    "wifi.{} must be empty, 8 to 63 bytes, "
-                    "or a 64-digit hex key".format(field)
-                )
+
+    ap_password = wifi.get("ap_password")
+    if ap_password:
+        length = len(ap_password.encode("utf-8"))
+        if length < 8 or length > 63:
+            raise ValueError("wifi.ap_password must be empty or 8 to 63 bytes")
     web_password = config.get("web", {}).get("password")
     if web_password is not None and not web_password:
         raise ValueError("web.password must not be empty")
@@ -285,6 +291,14 @@ def validate_config(config):
                             section, field, minimum, maximum
                         )
                     )
+
+    for section in ("led", "button"):
+        pin = config.get(section, {}).get("pin")
+        if pin is not None and pin not in _SUPPORTED_GPIO_PINS:
+            raise ValueError(
+                "{}.pin must be a GPIO supported by the shipped ESP32-C3 firmware"
+                .format(section)
+            )
 
     if "id" in config.get("printer", {}):
         printer_id = config["printer"]["id"]

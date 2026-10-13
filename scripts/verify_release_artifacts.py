@@ -49,7 +49,7 @@ def release_artifact_errors(record, artifact_dir):
     except OSError:
         ota_body = None
     if ota_body is not None:
-        max_bytes = getattr(ota_manager, "MAX_BUNDLE_BODY_BYTES", 104 * 1024)
+        max_bytes = getattr(ota_manager, "MAX_BUNDLE_BODY_BYTES", 96 * 1024)
         if len(ota_body) > max_bytes:
             errors.append(
                 "OTA bundle exceeds the {} byte device payload limit".format(max_bytes)
