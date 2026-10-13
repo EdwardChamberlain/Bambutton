@@ -18,6 +18,10 @@ REQUIRED_FILES = (
     "micro/ota_manager.py",
     "micro/web_config.py",
     "firmware/ESP32_GENERIC_C3-20260406-v1.28.0.bin",
+    "firmware/LICENSES/MicroPython-LICENSE-v1.28.0.txt",
+    "firmware/LICENSES/ESP-IDF-LICENSE-v5.5.1.txt",
+    "firmware/LICENSES/ESP-IDF-COPYRIGHT-v5.5.1.rst",
+    "third_party_licenses/pyserial-3.5-LICENSE.txt",
 )
 
 
