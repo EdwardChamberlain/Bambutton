@@ -2,6 +2,8 @@ import base64
 import hashlib
 import io
 import json
+import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -72,6 +74,78 @@ def test_confirmed_candidate_clears_pending_state(tmp_path):
     assert manager.confirm_boot() is True
     assert not (tmp_path / ".bambutton/pending.json").exists()
     assert manager.status()["pending"] is None
+
+
+@pytest.mark.parametrize("boot_state", ["bootstrap", "candidate", "confirmed"])
+def test_launch_reclaims_verification_buffers_before_app_start(
+    tmp_path, monkeypatch, boot_state,
+):
+    events = []
+    manager = ota_manager.OTAUpdateManager(root=str(tmp_path))
+    app = (
+        "from boot_probe import events, manager\n"
+        "assert events == ['verified', 'collected']\n"
+        "events.append('started')\n"
+        "manager.confirm_boot()\n"
+    ).encode()
+    if boot_state == "bootstrap":
+        bootstrap = tmp_path / ".bambutton/bootstrap"
+        bootstrap.mkdir(parents=True)
+        for filename in ota_manager.APP_FILES:
+            (bootstrap / filename).write_bytes(
+                app if filename == "app_main.py" else b"# support module\n"
+            )
+    else:
+        manager.stage_bundle(bundle(files={"app_main.py": app}))
+        manager.commit_staged()
+        manager.confirm_boot()
+        if boot_state == "candidate":
+            manager.stage_bundle(bundle("2.0.0", files={"app_main.py": app}))
+            manager.commit_staged()
+
+    verify_slot = manager._verify_slot
+
+    def verify(slot):
+        verify_slot(slot)
+        events.append("verified")
+
+    monkeypatch.setattr(manager, "_verify_slot", verify)
+    monkeypatch.setattr(
+        ota_manager, "gc",
+        SimpleNamespace(collect=lambda: events.append("collected")),
+    )
+    monkeypatch.setitem(
+        sys.modules, "boot_probe", SimpleNamespace(events=events, manager=manager)
+    )
+    monkeypatch.delitem(sys.modules, "app_main", raising=False)
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    manager.launch()
+
+    assert events == ["verified", "collected", "started"]
+    assert manager.status()["active_slot"] == (
+        "app_b" if boot_state == "candidate" else "app_a"
+    )
+    assert manager.status()["pending"] is None
+
+
+def test_launch_rejects_corrupt_candidate_before_app_start(tmp_path, monkeypatch):
+    resets = []
+    manager = ota_manager.OTAUpdateManager(
+        root=str(tmp_path), reset=lambda: resets.append(True),
+    )
+    manager.stage_bundle(bundle())
+    manager.commit_staged()
+    app_path = tmp_path / ".bambutton/app_a/app_main.py"
+    app_path.write_bytes(b"X" * app_path.stat().st_size)
+    monkeypatch.delitem(sys.modules, "app_main", raising=False)
+
+    with pytest.raises(ota_manager.OTAError, match="rollback"):
+        manager.launch()
+
+    assert "app_main" not in sys.modules
+    assert resets == [True]
+    assert manager.status()["active_slot"] is None
 
 
 def test_unconfirmed_candidate_rolls_back_before_launch(tmp_path):
