@@ -22,6 +22,9 @@ if hasattr(sys, "_MEIPASS"):
 else:
     RESOURCE_ROOT = SOURCE_ROOT if (SOURCE_ROOT / "micro").exists() else PACKAGE_ROOT
 
+if str(RESOURCE_ROOT) not in sys.path:
+    sys.path.insert(0, str(RESOURCE_ROOT))
+
 MICRO_DIR = RESOURCE_ROOT / "micro"
 CONFIG_EXAMPLE_PATH = MICRO_DIR / "config_example.json"
 DEFAULT_FIRMWARE_DIR = RESOURCE_ROOT / "firmware"
@@ -535,6 +538,13 @@ def validate_config_file(path):
 
     if not isinstance(config, dict):
         raise ValueError("Configuration file must contain a JSON object.")
+
+    from micro.config_loader import validate_config as validate_firmware_config
+
+    try:
+        validate_firmware_config(config)
+    except ValueError as exc:
+        raise ValueError("Invalid configuration: {}".format(exc))
 
     return config_path
 

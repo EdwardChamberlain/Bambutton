@@ -1,4 +1,3 @@
-import copy
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -13,8 +12,13 @@ class StopMainLoop(BaseException):
     pass
 
 
-def test_incomplete_config_starts_setup_ap_without_printer_api_requests(monkeypatch):
-    config = copy.deepcopy(config_loader.DEFAULT_CONFIG)
+def test_invalid_persisted_config_starts_setup_ap_without_printer_api_requests(
+    tmp_path, monkeypatch
+):
+    config_path = tmp_path / "config.json"
+    config_path.write_text('{"button": {"pull": "invalid"}}')
+    config = config_loader.load_config(config_path)
+    assert config["button"]["pull"] == "down"
     api_calls = []
 
     class FakeNetwork:
