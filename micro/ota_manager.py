@@ -31,6 +31,7 @@ except ImportError:
     except ImportError:
         requests = None
 
+import gc
 import os
 import sys
 
@@ -353,6 +354,8 @@ class OTAUpdateManager:
         slot_path = self._slot_path(slot)
         try:
             self._verify_slot(slot)
+            # Reclaim verification buffers before application and Wi-Fi startup.
+            gc.collect()
             if slot_path not in sys.path:
                 sys.path.insert(0, slot_path)
             return __import__("app_main")
