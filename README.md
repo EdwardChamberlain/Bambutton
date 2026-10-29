@@ -81,20 +81,30 @@ printer ID, and any hardware pin changes. The default wiring is GPIO 3 for the
 LED and GPIO 4 for the button. `micro/config_example.json` is a clean template
 if you need one.
 
-Erase the board, flash the bundled ESP32-C3 MicroPython firmware, and copy the
-application files:
+Re-flashing is a clean installation: it erases all existing application files
+and settings. To keep the current settings, first [grab the board configuration](#grab-the-board-configuration)
+and copy the saved file to `micro/config.json` before reinstalling the application.
+The configuration backup contains credentials; keep it private.
+
+Flash the bundled ESP32-C3 MicroPython firmware, then copy the application files:
 
 ```bash
-python -m esptool --chip esp32c3 --port /dev/tty.usbmodemXXXX erase_flash
-python -m esptool --chip esp32c3 --port /dev/tty.usbmodemXXXX write_flash -z 0x0 firmware/ESP32_GENERIC_C3-20260406-v1.28.0.bin
-python scripts/push_micro.py --clean
+python scripts/flash_firmware.py firmware/ESP32_GENERIC_C3-20260406-v1.28.0.bin --clean --device /dev/tty.usbmodemXXXX
+python scripts/push_micro.py --clean --device /dev/tty.usbmodemXXXX
 ```
 
-Replace `/dev/tty.usbmodemXXXX` with the board's serial port. `mpremote` can
-usually find the port automatically; if it cannot, pass it to the copy script:
+Replace `/dev/tty.usbmodemXXXX` with the board's serial port (for example, `COM4`
+on Windows). The firmware script requires `--clean` to acknowledge the erase.
+It checks that the image is readable and its ESP32-C3 header, checksum and
+validation hash are valid before contacting the board. It stops on an erase or
+write failure and uses the same selected port for both operations.
+
+You can omit `--device` from the firmware script when exactly one serial port
+is available; if there are multiple ports, it asks you to select one explicitly.
+`mpremote` can usually find the port automatically for the application copy:
 
 ```bash
-python scripts/push_micro.py --clean --device /dev/tty.usbmodemXXXX
+python scripts/push_micro.py --clean
 ```
 
 The copy script resets the board when it finishes. To update only the
@@ -104,6 +114,11 @@ configuration later:
 mpremote cp micro/config.json :
 mpremote reset
 ```
+
+The firmware script also accepts another local, complete ESP32-C3 MicroPython
+`.bin` image in place of the bundled file. Use a full board image intended for
+flashing at offset `0x0`, rather than an application-only image or an OTA JSON
+bundle. Normal Bambutton application updates should use [OTA](#application-updates).
 
 The repository includes a firmware image for the ESP32-C3 Generic board. Check
 the [latest MicroPython ESP32-C3 release](https://micropython.org/download/ESP32_GENERIC_C3/)
