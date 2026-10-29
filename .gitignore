@@ -222,3 +222,4 @@ __marimo__/
 
 # Local board credentials
 micro/config.json
+/grabbed configs/

@@ -109,6 +109,30 @@ The repository includes a firmware image for the ESP32-C3 Generic board. Check
 the [latest MicroPython ESP32-C3 release](https://micropython.org/download/ESP32_GENERIC_C3/)
 if you want to use a newer compatible image.
 
+### Grab the board configuration
+
+To back up the connected board's current `config.json` with `mpremote`, run:
+
+```bash
+python scripts/grab_config.py
+```
+
+If automatic port detection is unavailable, select the device explicitly:
+
+```bash
+python scripts/grab_config.py --device /dev/tty.usbmodemXXXX
+```
+
+The script prints the saved path in the repository's `grabbed configs` folder,
+which it creates automatically. Each capture has a timestamp and a unique
+suffix, so earlier downloads are preserved. The output location is the same
+when the script is invoked from another working directory. Failed downloads
+are removed.
+
+Grabbing a configuration leaves the files on the board and `micro/config.json`
+unchanged. Downloaded configurations contain credentials, so `grabbed configs`
+is ignored by Git. Keep these backups private.
+
 ### Run without auto-start
 
 To copy support files without installing `main.py` as the board's auto-starting
